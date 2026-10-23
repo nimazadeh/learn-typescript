@@ -61,6 +61,10 @@ function applyProps(node, props, isSvg = false) {
       node.addEventListener(key.slice(2).toLowerCase(), value);
     } else if (isSvg) {
       node.setAttribute(key, String(value));
+    } else if (key.includes('-') || node[key] === undefined) {
+      // نام‌های خط‌دار (aria-*، data-*، stroke-dashoffset) شناسه‌ی JS نیستند،
+      // پس `node[key] = …` بی‌صدا روی یک پراپرتی خیالی می‌نویسد. باید setAttribute شود.
+      node.setAttribute(key, String(value));
     } else {
       node[key] = value;
     }

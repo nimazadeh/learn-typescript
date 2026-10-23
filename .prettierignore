@@ -1,0 +1,10 @@
+node_modules/
+assets/
+dist/
+coverage/
+
+# داده‌ی آموزشی: قالب‌بندی دستیِ template literalها همان چیزی است که کاربر می‌بیند
+src/data/curriculum/
+src/data/playground.js
+src/data/playbook.js
+src/data/roadmapGraph.js

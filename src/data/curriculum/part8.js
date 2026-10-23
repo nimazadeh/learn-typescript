@@ -30,13 +30,13 @@ console.log(e);`,
         h: 'گام ۲ — استخراج اعضای یک Discriminated Union',
         p:
           'یکی از قوی‌ترین کاربردها: از یک Union بزرگ، فقط اعضای دارای یک `kind` مشخص را بیرون بکش.',
-        code: `type Event =
+        code: `type AppEvent =
   | { kind: 'click'; x: number }
   | { kind: 'scroll'; delta: number }
   | { kind: 'key'; code: string };
 
-type ClickEvent = Extract<Event, { kind: 'click' }>;
-type NonKeyEvent = Exclude<Event, { kind: 'key' }>;
+type ClickEvent = Extract<AppEvent, { kind: 'click' }>;
+type NonKeyEvent = Exclude<AppEvent, { kind: 'key' }>;
 
 const click: ClickEvent = { kind: 'click', x: 10 };
 console.log(click.x);
@@ -106,12 +106,12 @@ console.log(Object.keys(u).join(','));`,
     },
     lab: {
       task: 'از یک Union رویداد، فقط رویدادهای دارای فیلد `x` را با `Extract` جدا کن.',
-      starter: `type Event =
+      starter: `type AppEvent =
   | { kind: 'click'; x: number; y: number }
   | { kind: 'move'; x: number; y: number }
   | { kind: 'key'; code: string };
 
-type WithCoordinates = Extract<Event, { x: number }>;
+type WithCoordinates = Extract<AppEvent, { x: number }>;
 
 function position(e: WithCoordinates): string { return \`(\${e.x},\${e.y})\`; }
 
@@ -371,7 +371,10 @@ function unstable(id: number): string {
 
 console.log(withRetry(unstable)(7), calls);`,
       solution: `function withRetry<T extends (...a: never[]) => unknown>(fn: T, n = 3): T {
-  return ((...args: Parameters<T>) => { ... }) as T;
+  return ((...args: Parameters<T>) => {
+    // ⬅️ بدنه‌ی تلاشِ مجدد اینجا می‌آید (حلقه + try/catch)
+    return fn(...args);
+  }) as T;
 }`,
     },
   },
@@ -783,7 +786,9 @@ type Result = Awaited<ReturnType<typeof searchLessons>>;
 type Item = Result['items'][number];
 
 const item: Item = { id: '2', title: 'test' };
-console.log(item.title, typeof Raw);`,
+// ⚠️ Raw و Result فقط «تایپ»اند: typeof Raw خطای TS2693 می‌دهد،
+// چون تایپ‌ها پس از کامپایل وجود ندارند و هیچ «مقداری» برای typeof نیست.
+console.log(item.title);`,
       solution: `type Result = Awaited<ReturnType<typeof searchLessons>>;
 type Item = Result['items'][number];`,
     },

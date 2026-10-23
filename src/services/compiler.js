@@ -3,19 +3,27 @@
    + حالت جایگزین آفلاین (بدون سرور) تا استودیو هرگز نشکند
    ========================================================================== */
 
-let serverAvailable = null; // lazy probe, cached
+/**
+ * کشِ «وعده» به‌جای کشِ «مقدار»: اگر دو کامپایل هم‌زمان قبل از آماده‌شدن
+ * پاسخ سرور شروع شوند، با کش مقدار هر دو یک پرسش تکراری می‌فرستادند و
+ * مقدار را بر پایه‌ی داده‌ی کهنه بازنویسی می‌کردند (race condition).
+ * با کش وعده، فقط یک بار پرسیده می‌شود و همه همان نتیجه را می‌گیرند.
+ * @type {Promise<string|false>|null}
+ */
+let probePromise = null;
 
-async function probeServer() {
-  if (serverAvailable !== null) return serverAvailable;
-  try {
-    const res = await fetch('/api/health', { method: 'GET' });
-    serverAvailable = res.ok;
-    const data = await res.json().catch(() => ({}));
-    return serverAvailable && data.tsVersion ? data.tsVersion : serverAvailable;
-  } catch {
-    serverAvailable = false;
-    return false;
-  }
+function probeServer() {
+  probePromise ??= (async () => {
+    try {
+      const res = await fetch('/api/health', { method: 'GET' });
+      if (!res.ok) return false;
+      const data = await res.json().catch(() => ({}));
+      return data.tsVersion || true;
+    } catch {
+      return false;
+    }
+  })();
+  return probePromise;
 }
 
 /**

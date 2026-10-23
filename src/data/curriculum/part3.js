@@ -388,7 +388,7 @@ console.log(f);`,
     },
     lab: {
       task: 'یک Discriminated Union با سه عضو بساز و با `assertNever` پوشش کامل را تضمین کن. سپس عضوی چهارم اضافه کن و خطا را ببین.',
-      starter: `type Event =
+      starter: `type AppEvent =
   | { kind: 'click'; x: number; y: number }
   | { kind: 'key'; code: string }
   | { kind: 'scroll'; delta: number };
@@ -397,7 +397,7 @@ function assertNever(v: never): never {
   throw new Error('پوشش ناقص: ' + JSON.stringify(v));
 }
 
-function describe(e: Event): string {
+function describe(e: AppEvent): string {
   switch (e.kind) {
     case 'click': return \`click at \${e.x},\${e.y}\`;
     case 'key': return \`key \${e.code}\`;
@@ -512,7 +512,8 @@ console.log(fakeUser.id);`,
 
 function parseConfig(value: unknown): Config {
   if (typeof value !== 'object' || value === null) throw new Error('config باید آبجکت باشد');
-  const raw: Record<string, unknown> = Object.assign({}, value);
+  // بعد از گارد بالا، value فقط object است؛ با as به نگاشت کلید/مقدار تبدیلش کن
+  const raw = value as Record<string, unknown>;
   const theme = raw['theme'];
   if (theme !== 'dark' && theme !== 'light') throw new Error('theme نامعتبر');
   const fontSize = raw['fontSize'];

@@ -484,11 +484,11 @@ console.log(create.title, update.id);`,
       task: 'یک `DistributiveOmit` بنویس و روی یک Discriminated Union آزمایش کن.',
       starter: `type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
-type Event =
+type AppEvent =
   | { kind: 'click'; x: number; y: number; id: string }
   | { kind: 'key'; code: string; id: string };
 
-type EventWithoutId = DistributiveOmit<Event, 'id'>;
+type EventWithoutId = DistributiveOmit<AppEvent, 'id'>;
 
 const e: EventWithoutId = { kind: 'key', code: 'Enter' };
 console.log(e.kind);`,

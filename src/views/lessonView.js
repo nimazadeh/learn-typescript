@@ -3,19 +3,12 @@
    ========================================================================== */
 
 import { el, render, toFa } from '../core/dom.js';
-import {
-  ALL_LESSONS, CHAPTERS, CHAPTER_BY_ID, LESSON_BY_ID, LEVEL_LABEL,
-  DAY_OF_LESSON, TOTAL_DAYS, lessonsOfChapter,
-} from '../data/curriculum/index.js';
-import {
-  getState, statusOf, setNodeStatus, cycleNodeStatus, subscribe, saveNote,
-} from '../core/store.js';
-import {
-  codeBlock, marginNote, quizCard, statusToggle, levelChip, chip, noteBox,
-  paragraph, sectionTitle, progressBar, richText,
-} from '../components/ui.js';
+import { ALL_LESSONS, CHAPTERS, CHAPTER_BY_ID, LESSON_BY_ID, DAY_OF_LESSON, TOTAL_DAYS, lessonsOfChapter } from '../data/curriculum/index.js';
+import { getState, statusOf, setNodeStatus, subscribe, quizSolvedOf } from '../core/store.js';
+import { codeBlock, marginNote, quizCard, statusToggle, levelChip, chip, noteBox, paragraph, richText } from '../components/ui.js';
 import { diagram } from '../components/diagrams.js';
 import { LiveLab } from '../components/liveLab.js';
+import { detectLang } from '../core/highlight.js';
 
 export function LessonView({ navigate, params }) {
   const root = el('div', { class: 'view lesson-view' });
@@ -52,6 +45,7 @@ export function LessonView({ navigate, params }) {
         ]),
         el('ul', { class: 'chapter-list' }, lessons.map((lesson) => {
           const status = statusOf(lesson.id);
+          const quizResult = quizSolvedOf(lesson.id);
           return el('li', {}, [
             el('button', {
               class: `lesson-link is-${status} ${lesson.id === currentId ? 'is-current' : ''}`,
@@ -62,6 +56,12 @@ export function LessonView({ navigate, params }) {
                 el('span', { class: 'lesson-link-fa', text: lesson.titleFa }),
                 el('span', { class: 'lesson-link-en', dir: 'ltr', text: lesson.titleEn }),
               ]),
+              quizResult === undefined ? null : el('span', {
+                class: `lesson-quiz-badge ${quizResult ? 'is-good' : 'is-bad'}`,
+                text: quizResult ? '✓' : '✗',
+                title: quizResult ? 'کوییز را درست پاسخ دادی' : 'کوییز را نادرست پاسخ دادی — دوباره مرور کن',
+                'aria-label': quizResult ? 'کوییز پاسخ داده شد، درست' : 'کوییز پاسخ داده شد، نادرست',
+              }),
               el('span', { class: 'lesson-minutes', text: `${toFa(lesson.minutes)}′` }),
             ]),
           ]);
@@ -82,7 +82,6 @@ export function LessonView({ navigate, params }) {
     const lesson = LESSON_BY_ID.get(currentId);
     if (!lesson) return;
     const chapter = CHAPTER_BY_ID.get(lesson.chapter);
-    const siblings = lessonsOfChapter(lesson.chapter);
     const indexInAll = ALL_LESSONS.findIndex((l) => l.id === lesson.id);
     const prev = ALL_LESSONS[indexInAll - 1];
     const next = ALL_LESSONS[indexInAll + 1];
@@ -120,6 +119,7 @@ export function LessonView({ navigate, params }) {
         step.code ? codeBlock({
           title: step.codeTitle ?? `${lesson.titleEn} — مثال ${toFa(i + 1)}`,
           code: step.code,
+          lang: detectLang(step),
           onRun: (code) => {
             if (activeLab) {
               activeLab.setCode(code);
@@ -133,10 +133,11 @@ export function LessonView({ navigate, params }) {
       return el('li', { class: 'step' }, [body]);
     }));
 
-    /* visual diagram */
-    const visual = lesson.visual ? el('section', { class: 'lesson-visual' }, [
+    /* visual diagram — اگر دیاگرامی برای این کلید وجود نداشت، هیچ جعبه‌ی خالی نمی‌سازیم */
+    const visualNode = lesson.visual ? diagram(lesson.visual) : null;
+    const visual = visualNode ? el('section', { class: 'lesson-visual' }, [
       el('h3', { class: 'block-title', text: '🎨 بازنمایی بصری' }),
-      diagram(lesson.visual),
+      visualNode,
     ]) : null;
 
     /* quiz */
@@ -177,19 +178,19 @@ export function LessonView({ navigate, params }) {
     const extras = el('section', { class: 'lesson-extras' }, [
       lesson.pitfalls?.length
         ? el('div', { class: 'extra-block warn' }, [
-            el('h4', { text: '⚠️ دام‌های رایج' }),
+            el('h3', { text: '⚠️ دام‌های رایج' }),
             el('ul', {}, lesson.pitfalls.map((p) => el('li', { innerHTML: richText(p) }))),
           ])
         : null,
       lesson.best?.length
         ? el('div', { class: 'extra-block good' }, [
-            el('h4', { text: '✅ بهترین رویه‌ها' }),
+            el('h3', { text: '✅ بهترین رویه‌ها' }),
             el('ul', {}, lesson.best.map((p) => el('li', { innerHTML: richText(p) }))),
           ])
         : null,
       lesson.drills?.length
         ? el('div', { class: 'extra-block drill' }, [
-            el('h4', { text: '🏋️ تمرین‌های دستی' }),
+            el('h3', { text: '🏋️ تمرین‌های دستی' }),
             el('ol', {}, lesson.drills.map((d) => el('li', {}, [
               el('div', { innerHTML: richText(d.prompt) }),
               d.solution
@@ -253,7 +254,7 @@ export function LessonView({ navigate, params }) {
     const notes = (lesson.margins ?? []).map(marginNote);
 
     const dayMeta = el('div', { class: 'margin-day' }, [
-      el('h4', { text: '📅 جای این درس در برنامه' }),
+      el('h3', { text: '📅 جای این درس در برنامه' }),
       el('p', {}, [
         'روز ', el('strong', { text: toFa(DAY_OF_LESSON.get(lesson.id)) }),
         ` از ${toFa(TOTAL_DAYS)} · فصل «${CHAPTER_BY_ID.get(lesson.chapter)?.title ?? ''}»`,
@@ -268,7 +269,7 @@ export function LessonView({ navigate, params }) {
       const upcoming = ALL_LESSONS.slice(idx + 1, idx + 4);
       if (upcoming.length === 0) return null;
       return el('div', { class: 'margin-next' }, [
-        el('h4', { text: '⏭ پیش‌نمایش مسیر' }),
+        el('h3', { text: '⏭ پیش‌نمایش مسیر' }),
         el('ol', {}, upcoming.map((l) => el('li', {}, [
           el('button', { class: 'linkish', text: l.titleFa, onclick: () => selectLesson(l.id) }),
           el('span', { class: 'next-en', dir: 'ltr', text: l.titleEn }),

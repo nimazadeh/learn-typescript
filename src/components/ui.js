@@ -3,8 +3,8 @@
    ========================================================================== */
 
 import { el, svg, render, toFa } from '../core/dom.js';
-import { highlightedLines } from '../core/highlight.js';
-import { cycleNodeStatus, saveNote, getState, recordQuiz, saveLab } from '../core/store.js';
+import { highlightedLines, CODE_LANGS } from '../core/highlight.js';
+import { cycleNodeStatus, saveNote, getState, recordQuiz, recordLessonQuiz, quizSolvedOf } from '../core/store.js';
 
 /* -------------------------------------------------------------------------- */
 /* Section heading + chips                                                     */
@@ -15,6 +15,26 @@ export function sectionTitle(text, subtitle = '', icon = '') {
     el('h2', { class: 'section-title' }, [icon && el('span', { class: 'section-icon', text: icon }), text]),
     subtitle && el('p', { class: 'section-subtitle', text: subtitle }),
   ]);
+}
+
+/**
+ * پیام کوتاه و موقت در پایین صفحه (تنها پیاده‌سازی toast در کل اپ).
+ * @param {string} text
+ * @param {object} [options]
+ * @param {number} [options.duration] چند میلی‌ثانیه دیده شود
+ * @param {'status'|'alert'} [options.role] برای صفحه‌خوان‌ها
+ */
+export function showToast(text, { duration = 4200, role = 'status' } = {}) {
+  const toast = el('div', {
+    class: 'toast',
+    text,
+    role,
+    'aria-live': role === 'alert' ? 'assertive' : 'polite',
+  });
+  document.body.appendChild(toast);
+  setTimeout(() => toast.classList.add('is-out'), duration);
+  setTimeout(() => toast.remove(), duration + 600);
+  return toast;
 }
 
 export function chip(text, variant = 'neutral', title = '') {
@@ -45,7 +65,14 @@ export function levelChip(level) {
 /**
  * @param {{title?:string, code:string, onRun?: (code:string)=>void, caption?:string}} opts
  */
-export function codeBlock({ title = 'TypeScript', code, onRun = null, caption = '' }) {
+/**
+ * بلوک کد. `lang` زبان واقعی محتواست ('ts' | 'bash' | 'json').
+ * برای زبان‌های غیر TypeScript دکمه‌ی «اجرا در آزمایشگاه» نمایش داده نمی‌شود،
+ * چون کامپایلر TypeScript روی `npm i -D typescript` فقط خطا تولید می‌کند.
+ */
+export function codeBlock({ title, code, onRun = null, caption = '', lang = 'ts' }) {
+  const language = CODE_LANGS[lang] ? lang : 'ts';
+  title = title ?? CODE_LANGS[language].label;
   const toolbar = el('div', { class: 'code-toolbar' }, [
     el('div', { class: 'code-dots' }, [el('i'), el('i'), el('i')]),
     el('span', { class: 'code-title', text: title }),
@@ -65,6 +92,7 @@ export function codeBlock({ title = 'TypeScript', code, onRun = null, caption = 
         },
       }),
       onRun &&
+        language === 'ts' &&
         el('button', {
           class: 'mini-btn primary',
           text: '▶ اجرا در آزمایشگاه',
@@ -75,7 +103,12 @@ export function codeBlock({ title = 'TypeScript', code, onRun = null, caption = 
 
   return el('figure', { class: 'code-block' }, [
     toolbar,
-    el('pre', { class: 'code-pre', dir: 'ltr', innerHTML: highlightedLines(code.replace(/\s+$/, '')) }),
+    el('pre', {
+      class: 'code-pre',
+      dir: 'ltr',
+      'data-lang': language,
+      innerHTML: highlightedLines(code.replace(/\s+$/, ''), language),
+    }),
     caption && el('figcaption', { class: 'code-caption', text: caption }),
   ]);
 }
@@ -99,7 +132,7 @@ export function marginNote(note) {
       el('span', { class: 'margin-icon', text: meta.icon }),
       el('span', { class: 'margin-kind', text: note.kicker || meta.label }),
     ]),
-    el('h4', { class: 'margin-title', text: note.title }),
+    el('h3', { class: 'margin-title', text: note.title }),
     el('div', { class: 'margin-body', innerHTML: richText(note.body) }),
     note.equation && el('div', { class: 'margin-equation', dir: 'ltr', text: note.equation }),
   ]);
@@ -129,24 +162,35 @@ export function quizCard(quiz, nodeId) {
 
   const options = el('div', { class: 'quiz-options' });
 
+  /** علامت‌گذاری گزینه‌ها و نمایش توضیح (هم برای کلیک تازه، هم برای بازگردانی). */
+  function reveal(chosenIndex, { alreadyAnswered = false } = {}) {
+    const correct = chosenIndex === quiz.answer;
+    options.querySelectorAll('.quiz-option').forEach((btn, i) => {
+      btn.disabled = true;
+      btn.classList.toggle('is-correct', i === quiz.answer);
+      btn.classList.toggle('is-wrong', i === chosenIndex && !correct);
+    });
+    feedback.hidden = false;
+    feedback.className = `quiz-feedback ${correct ? 'is-good' : 'is-bad'}`;
+    render(
+      feedback,
+      el('strong', { text: correct ? '✓ درست — آفرین!' : '✗ نادرست' }),
+      el('div', { innerHTML: richText(quiz.explain) }),
+      alreadyAnswered && el('p', {
+        class: 'quiz-answered-note',
+        text: 'قبلاً به این کوییز پاسخ داده‌ای — نتیجه‌اش در فهرست درس‌ها هم دیده می‌شود.',
+      }),
+    );
+    return correct;
+  }
+
   quiz.options.forEach((option, index) => {
     const btn = el('button', {
       class: 'quiz-option',
       onclick: () => {
-        const correct = index === quiz.answer;
+        const correct = reveal(index);
         recordQuiz(correct);
-        options.querySelectorAll('.quiz-option').forEach((b, i) => {
-          b.disabled = true;
-          b.classList.toggle('is-correct', i === quiz.answer);
-          b.classList.toggle('is-wrong', i === index && !correct);
-        });
-        feedback.hidden = false;
-        feedback.className = `quiz-feedback ${correct ? 'is-good' : 'is-bad'}`;
-        render(
-          feedback,
-          el('strong', { text: correct ? '✓ درست — آفرین!' : '✗ نادرست' }),
-          el('div', { innerHTML: richText(quiz.explain) }),
-        );
+        recordLessonQuiz(nodeId, correct);
       },
     }, [
       el('span', { class: 'quiz-marker', text: ['A', 'B', 'C', 'D'][index] }),
@@ -155,7 +199,16 @@ export function quizCard(quiz, nodeId) {
     options.appendChild(btn);
   });
 
-  render(root, el('h4', { class: 'quiz-q' }, [el('span', { text: '؟' }), quiz.q]), options, feedback);
+  render(root, el('h3', { class: 'quiz-q' }, [el('span', { text: '؟' }), quiz.q]), options, feedback);
+
+  // اگر قبلاً پاسخ داده بودی، همان نتیجه را بازمی‌گردانیم (نه یک کوییز خاموش)
+  const previous = quizSolvedOf(nodeId);
+  if (previous !== undefined) {
+    const chosen = previous === true ? quiz.answer : (quiz.answer + 1) % quiz.options.length;
+    reveal(chosen, { alreadyAnswered: true });
+    root.classList.add('is-answered');
+  }
+
   return root;
 }
 
@@ -229,37 +282,6 @@ export function noteBox(nodeId, placeholder = 'با زبان خودت توضیح
     ]),
     area,
   ]);
-}
-
-/* -------------------------------------------------------------------------- */
-/* Tabs (used by margin pane, output pane, playground)                         */
-/* -------------------------------------------------------------------------- */
-
-export function tabs(items, { onSelect = null, initial = 0 } = {}) {
-  const nav = el('div', { class: 'tab-nav', role: 'tablist' });
-  const panel = el('div', { class: 'tab-panel' });
-  const buttons = [];
-
-  const activate = (index) => {
-    buttons.forEach((b, i) => b.classList.toggle('is-active', i === index));
-    render(panel, items[index].render());
-    onSelect?.(items[index].id);
-  };
-
-  items.forEach((item, index) => {
-    const btn = el('button', {
-      class: 'tab-btn',
-      role: 'tab',
-      text: item.label,
-      onclick: () => activate(index),
-    });
-    if (item.badge) btn.appendChild(el('span', { class: 'tab-badge', text: String(item.badge) }));
-    buttons.push(btn);
-    nav.appendChild(btn);
-  });
-
-  activate(initial);
-  return { root: el('div', { class: 'tabs' }, [nav, panel]), activate };
 }
 
 /* -------------------------------------------------------------------------- */

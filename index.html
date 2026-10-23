@@ -35,6 +35,7 @@
     </div>
 
     <div class="header-tools">
+      <div id="header-timer"></div>
       <span class="engine-badge" id="engine-badge">در حال اتصال…</span>
       <button id="theme-toggle" class="icon-btn" title="تغییر تم" aria-label="تغییر تم روشن/تاریک">🌙</button>
       <div class="settings-wrap">
@@ -49,7 +50,9 @@
     </div>
   </header>
 
-  <nav class="nav-bar" id="nav-tabs" role="tablist" aria-label="بخش‌های استودیو"></nav>
+  <!-- ناوبری اصلی بین «نما»هاست نه بین پنل‌های یک tablist،
+       پس role="tablist"/aria-selected غلط معنایی است؛ aria-current="page" درست است. -->
+  <nav class="nav-bar" id="nav-tabs" aria-label="بخش‌های استودیو"></nav>
 
   <main id="view-root" class="view-root" tabindex="-1"></main>
 

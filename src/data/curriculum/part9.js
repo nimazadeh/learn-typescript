@@ -300,7 +300,8 @@ type ServiceApi = OnlyFunctions<Service>;
 
 const api: ServiceApi = { start: () => undefined, stop: () => undefined };
 api.start();
-console.log(typeof FrozenService, Object.keys(api).length);`,
+// ⚠️ FrozenService یک تایپ است نه مقدار ← typeof FrozenService یعنی TS2693.
+console.log(Object.keys(api).length);`,
       solution: `type OnlyFunctions<T> = { [K in keyof T as T[K] extends Function ? K : never]: T[K] };`,
     },
   },
@@ -845,7 +846,7 @@ console.log('depth:', depth(tree));`,
           'TypeScript یک سقف عمق (~۵۰ سطح) برای بازگشت تایپ دارد. اگر بازگشت خیلی عمیق یا بی‌نهایت شود، خطای TS2589 می‌گیری. راه‌حل: شرط پایه‌ی دقیق‌تر، محدودکردن عمق با Tuple، یا ساده‌سازی تایپ.',
         code: `// بازگشت با عمق محدود (Tuple به‌عنوان شمارنده):
 type Repeat<S extends string, N extends number, Acc extends unknown[] = []> =
-  Acc['length'] extends N ? '' : \`\${S}\${Repeat<S, N, [...Acc, unknown]>\`;
+  Acc['length'] extends N ? '' : \`\${S}\${Repeat<S, N, [...Acc, unknown]>}\`;
 
 type Three = Repeat<'ab', 3>; // 'ababab'
 

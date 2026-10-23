@@ -29,7 +29,6 @@
   --fs-md: 1.08rem;
   --fs-lg: 1.35rem;
   --fs-xl: 1.75rem;
-  --fs-2xl: 2.3rem;
 
   /* spacing scale (4px base) */
   --sp-1: 4px;
@@ -40,7 +39,6 @@
   --sp-6: 24px;
   --sp-8: 32px;
   --sp-10: 40px;
-  --sp-12: 48px;
 
   /* radii */
   --r-sm: 8px;

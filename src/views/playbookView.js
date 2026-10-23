@@ -2,13 +2,13 @@
    Playbook View — فرمول‌های موفقیت، روش‌های یادگیری، بانک مصاحبه و منابع
    ========================================================================== */
 
-import { el, render, toFa, escapeHtml } from '../core/dom.js';
-import { sectionTitle, chip, codeBlock, richText, marginNote } from '../components/ui.js';
+import { el, render, toFa } from '../core/dom.js';
+import { sectionTitle, chip, richText } from '../components/ui.js';
 import {
   SUCCESS_FORMULAS, STUDY_METHODS, INTERVIEW_BANK, RESOURCES, FLASHCARDS,
 } from '../data/playbook.js';
 import { ALL_LESSONS, CHAPTERS, CURRICULUM_STATS, TOTAL_DAYS } from '../data/curriculum/index.js';
-import { getState, statusOf } from '../core/store.js';
+import { statusOf } from '../core/store.js';
 import { diagram } from '../components/diagrams.js';
 
 /* فرمول‌های جمع‌بندی‌شده از دل همه‌ی درس‌ها (حاشیه‌نویسی‌های سراسری) */
@@ -56,7 +56,7 @@ export function PlaybookView({ navigate }) {
     el('article', { class: 'method-row' }, [
       el('span', { class: 'method-row-icon', text: method.icon }),
       el('div', {}, [
-        el('h4', { text: method.title }),
+        el('h3', { text: method.title }),
         el('p', { text: method.body }),
       ]),
     ])));
@@ -94,7 +94,7 @@ export function PlaybookView({ navigate }) {
   /* ---------------- resources ---------------- */
   const resourcesWrap = el('div', { class: 'resources-grid' }, RESOURCES.map((group) =>
     el('div', { class: 'resource-group' }, [
-      el('h4', { text: group.group }),
+      el('h3', { text: group.group }),
       el('ul', {}, group.items.map((item) =>
         el('li', {}, [
           el('a', { href: item.href, target: '_blank', rel: 'noopener noreferrer', text: item.label }),
@@ -186,7 +186,7 @@ function heroStat(value, label) {
 
 function cheatCard(title, rows) {
   return el('div', { class: 'cheat-card' }, [
-    el('h4', { text: title }),
+    el('h3', { text: title }),
     el('dl', { class: 'cheat-list' }, rows.flatMap(([term, desc]) => [
       el('dt', { dir: 'ltr', text: term }),
       el('dd', { text: desc }),
@@ -219,7 +219,10 @@ function buildChapterSummary(navigate) {
       el('table', { class: 'data-table' }, [
         el('thead', {}, [el('tr', {}, [
           el('th', { text: 'فصل' }), el('th', { text: 'درس‌ها' }), el('th', { text: 'دقیقه' }),
-          el('th', { text: 'پیشرفت' }), el('th', { text: '' }),
+          el('th', { text: 'پیشرفت' }),
+          // ستون آخر فقط «نوار پیشرفت» است؛ سرستون خالی هم برای صفحه‌خوان
+          // و هم برای کاربر بینا بی‌معناست، پس برچسب متنی واقعی می‌گیرد.
+          el('th', { text: 'نمودار' }),
         ])]),
         el('tbody', {}, rows),
       ]),

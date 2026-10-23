@@ -288,6 +288,10 @@
 .roadmap-svg { width: 100%; height: 100%; display: block; }
 
 .map-edge { transition: stroke var(--t-fast), stroke-width var(--t-fast); }
+/* یال‌های نقشه: solid = پیش‌نیاز قطعی، dashed = ارتباط پیشنهادی */
+.map-edge.is-solid { stroke-dasharray: none; }
+.map-edge.is-dashed { stroke-dasharray: 5 5; opacity: 0.62; }
+.map-edge.is-active { stroke-width: 3; opacity: 1; }
 .map-node { cursor: pointer; transition: opacity var(--t-base); }
 .map-node:focus-visible { outline: none; }
 .map-node:focus-visible .node-box { stroke: var(--accent); stroke-width: 3.5; }
@@ -534,4 +538,105 @@
   .brand-text h1 { font-size: var(--fs-sm); }
   .header-progress { display: none; }
   .map-stats { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------------- header timer (پومودورو سراسری) ---------------- */
+.htimer { position: relative; display: flex; align-items: center; gap: var(--sp-1); }
+.htimer-active {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 3px var(--sp-2) 3px var(--sp-1);
+  border-radius: var(--r-pill);
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+}
+.htimer-active[hidden] { display: none; }
+.htimer-label { font-size: var(--fs-xs); color: var(--ink-3); max-width: 8ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.htimer-clock {
+  font-family: var(--font-mono);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--ink-1);
+}
+.htimer-ring { width: 30px; height: 30px; transform: rotate(-90deg); flex: none; }
+.htimer-ring-bg { fill: none; stroke: var(--bg-surface-3); stroke-width: 3; }
+.htimer-ring-fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 400ms linear, stroke var(--t-base);
+}
+
+/* دقیقه‌ی آخر: هشدار بصری ملایم (بدون تکان‌خوردن و بدون پرش) */
+.htimer.is-low .htimer-clock { color: var(--warning); }
+.htimer.is-low .htimer-ring-fill { stroke: var(--warning); }
+.htimer.is-done .htimer-ring-fill { stroke: var(--success); }
+.htimer.is-done { animation: htimerBreath 2.4s var(--ease) 3; }
+@keyframes htimerBreath {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 0 5px var(--success-soft); }
+}
+
+/* در حال اجرا: حلقه‌ی نرمِ رنگی تا بدون نگاه‌کردن به ساعت، وضعیت حس شود */
+.htimer.is-running .htimer-ring-fill { filter: drop-shadow(0 0 3px var(--accent-soft)); }
+.htimer.is-running .htimer-clock { color: var(--accent); }
+
+.htimer .icon-btn { width: 28px; height: 28px; font-size: 0.82rem; border-radius: 8px; }
+
+.htimer-popover {
+  position: absolute;
+  inset-inline-start: 0;
+  top: calc(100% + 10px);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  width: 292px;
+  padding: var(--sp-3);
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+}
+.htimer-popover[hidden] { display: none; }
+.htimer-popover-hint { font-size: var(--fs-xs); color: var(--ink-3); line-height: 1.85; }
+.htimer-presets { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--sp-1); }
+.htimer-preset {
+  padding: 0.42rem 0;
+  border-radius: var(--r-sm);
+  background: var(--bg-surface-3);
+  border: 1px solid transparent;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+.htimer-preset:hover { background: var(--bg-surface-2); }
+.htimer-preset.is-selected { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent); }
+.htimer-custom-row { display: flex; align-items: center; gap: var(--sp-2); }
+.htimer-custom-label { font-size: var(--fs-xs); color: var(--ink-2); }
+.htimer-custom-input {
+  width: 76px;
+  padding: 0.36rem 0.5rem;
+  border-radius: var(--r-sm);
+  background: var(--bg-surface-3);
+  border: 1px solid var(--border-default);
+  color: var(--ink-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+.htimer-custom-unit { font-size: var(--fs-xs); color: var(--ink-3); }
+.htimer-start { width: 100%; justify-content: center; }
+
+@media (max-width: 980px) {
+  .htimer-label { display: none; }
+  .htimer-popover { width: min(292px, calc(100vw - 24px)); }
+}
+@media (max-width: 560px) {
+  .htimer-presets { grid-template-columns: repeat(4, 1fr); }
+  .htimer-clock { font-size: var(--fs-sm); }
 }
