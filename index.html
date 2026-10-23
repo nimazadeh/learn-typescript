@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="استودیو آموزش بصری TypeScript — نقشه‌ی راه تعاملی، درس‌های گام‌به‌گام، آزمایشگاه زنده با کامپایلر واقعی، حاشیه‌نویسی فرمول‌های موفقیت و مربی مطالعه‌ی روز ۵ ساعته." />
+  <meta name="color-scheme" content="dark light" />
+  <title>TypeScript Mastery Studio — استودیو بصری یادگیری تایپ‌اسکریپت</title>
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233178c6'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='15' font-weight='700' text-anchor='middle' fill='white'%3ETS%3C/text%3E%3C/svg%3E" />
+
+  <link rel="stylesheet" href="styles/tokens.css" />
+  <link rel="stylesheet" href="styles/base.css" />
+  <link rel="stylesheet" href="styles/layout.css" />
+  <link rel="stylesheet" href="styles/components.css" />
+  <link rel="stylesheet" href="styles/views.css" />
+</head>
+<body>
+  <a class="skip-link" href="#view-root">پرش به محتوای اصلی</a>
+
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">TS</div>
+      <div class="brand-text">
+        <h1>TypeScript Mastery Studio</h1>
+        <p>استودیو آموزش بصری — نقشه‌ی راه رسمی roadmap.sh/typescript</p>
+      </div>
+    </div>
+
+    <div class="header-progress" title="پیشرفت کلی مسیر">
+      <div class="header-progress-track">
+        <div class="header-progress-fill" id="header-progress-fill"></div>
+      </div>
+      <span class="header-progress-text" id="header-progress-text">۰٪</span>
+    </div>
+
+    <div class="header-tools">
+      <span class="engine-badge" id="engine-badge">در حال اتصال…</span>
+      <button id="theme-toggle" class="icon-btn" title="تغییر تم" aria-label="تغییر تم روشن/تاریک">🌙</button>
+      <div class="settings-wrap">
+        <button id="settings-btn" class="icon-btn" title="تنظیمات" aria-label="تنظیمات">⚙️</button>
+        <div id="settings-menu" class="settings-menu" hidden>
+          <button id="export-progress">⬇️ پشتیبان‌گیری از پیشرفت</button>
+          <button id="import-progress">⬆️ بازیابی از فایل</button>
+          <button id="reset-progress" class="danger">🗑️ پاک‌کردن همه‌ی پیشرفت</button>
+          <p class="settings-note">پیشرفت تو در همین مرورگر ذخیره می‌شود (localStorage).</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="nav-bar" id="nav-tabs" role="tablist" aria-label="بخش‌های استودیو"></nav>
+
+  <main id="view-root" class="view-root" tabindex="-1"></main>
+
+  <!-- Command Palette -->
+  <div class="palette" id="palette" hidden role="dialog" aria-modal="true" aria-label="جست‌وجوی سریع">
+    <div class="palette-card">
+      <div class="palette-input-row">
+        <span aria-hidden="true">🔎</span>
+        <input id="palette-input" type="text" placeholder="جست‌وجو در درس‌ها، فرمول‌ها، سؤالات مصاحبه و کارت‌ها…" autocomplete="off" />
+        <kbd>Esc</kbd>
+      </div>
+      <div class="palette-results" id="palette-results"></div>
+      <div class="palette-foot">
+        <span><kbd>↑</kbd><kbd>↓</kbd> جابه‌جایی</span>
+        <span><kbd>Enter</kbd> انتخاب</span>
+      </div>
+    </div>
+  </div>
+
+  <footer class="app-footer">
+    <p>
+      ساخته‌شده با HTML/CSS/JS خالص — بدون هیچ فریمورک یا وابستگی خارجی.
+      موتور کامپایل: TypeScript رسمی روی سرور محلی.
+      مسیر برگرفته از <a href="https://roadmap.sh/typescript" target="_blank" rel="noopener noreferrer">roadmap.sh/typescript</a>.
+    </p>
+  </footer>
+
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
