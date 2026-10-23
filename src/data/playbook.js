@@ -374,4 +374,29 @@ export const WEEKLY_KPIS = [
   { key: 'labRuns', label: 'اجرای آزمایشگاه زنده', target: 60, unit: 'بار' },
   { key: 'flashcards', label: 'کارت‌های مرور شده', target: 120, unit: 'کارت' },
   { key: 'errors', label: 'خطاهای ثبت‌شده در دفترچه', target: 20, unit: 'خطا' },
+  { key: 'pomodoros', label: 'پومودوروهای شروع‌شده', target: 20, unit: 'بار' },
 ];
+
+/**
+ * تنها منبع محاسبه‌ی KPIها — یک تابع خالص از وضعیت مرکزی.
+ * هم نمای مربی از آن استفاده می‌کند و هم ابزارهای تست، پس هیچ KPI نمی‌تواند
+ * بی‌صدا روی صفر بماند (همان باگی که برای labRuns اتفاق افتاده بود).
+ *
+ * @param {object} state وضعیت مرکزی (یا بخشی از آن)
+ * @param {(id:string)=>boolean} [isLessonId] آیا این شناسه یک درس است
+ * @returns {Record<string, number>}
+ */
+export function kpiActual(state = {}, isLessonId = () => true) {
+  const quiz = state.quizStats ?? { correct: 0, wrong: 0 };
+  const quizTotal = (quiz.correct ?? 0) + (quiz.wrong ?? 0);
+
+  return {
+    lessons: (state.completedNodes ?? []).filter((id) => isLessonId(id)).length,
+    minutes: Object.values(state.studyLog ?? {}).reduce((sum, day) => sum + (day?.minutes ?? 0), 0),
+    quizAccuracy: quizTotal === 0 ? 0 : Math.round(((quiz.correct ?? 0) / quizTotal) * 100),
+    labRuns: state.labRuns ?? 0,
+    flashcards: Object.keys(state.flashcardProgress ?? {}).length,
+    errors: Object.keys(state.notes ?? {}).length,
+    pomodoros: state.pomodorosDone ?? 0,
+  };
+}

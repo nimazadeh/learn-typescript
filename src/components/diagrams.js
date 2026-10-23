@@ -1,3 +1,4 @@
+/* eslint-disable no-template-curly-in-string */
 /* ==========================================================================
    Visual Diagrams — یک DSL اعلامی + چند رندرکننده برای همه‌ی نمودارهای استودیو
    (به‌جای ۳۶ نمودار دستی: یک موتور، ۳۶ توصیف داده‌ای — DRY محض)
@@ -15,7 +16,7 @@ function renderVenn(spec) {
   const width = 520;
   const height = 260;
   const shapes = spec.sets.map((set) =>
-    svg('g', { class: 'venn-set' }, [
+    svg('g', {}, [
       svg('circle', { cx: set.x, cy: set.y, r: set.r, class: `venn-blob tone-${set.tone ?? 'blue'}` }),
       svgText(set.x, set.y - set.r + 20, set.label, { class: 'venn-label' }),
       ...(set.items ?? []).map((item, i) =>
@@ -127,7 +128,7 @@ function renderTable(spec) {
     el('table', { class: 'data-table' }, [
       el('thead', {}, [el('tr', {}, spec.headers.map((h, i) => el('th', { dir: i === 0 ? 'ltr' : 'rtl', text: h })))]),
       el('tbody', {}, spec.rows.map((row) =>
-        el('tr', {}, row.map((cell, i) => el('td', {
+        el('tr', {}, row.map((cell) => el('td', {
           dir: /^[A-Za-z0-9_`[\]|&<>{}(),.'":? -]+$/.test(String(cell)) ? 'ltr' : 'rtl',
           text: cell,
         })))),
@@ -175,14 +176,16 @@ const RENDERERS = {
 };
 
 function svgFrame(width, height, children) {
-  return el('div', { class: 'svg-scroll' }, [
-    svg('svg', {
-      viewBox: `0 0 ${width} ${height}`,
-      class: 'diagram-svg',
-      preserveAspectRatio: 'xMidYMid meet',
-      role: 'img',
-    }, children.filter(Boolean)),
-  ]);
+  const figure = svg('svg', {
+    viewBox: `0 0 ${width} ${height}`,
+    class: 'diagram-svg',
+    preserveAspectRatio: 'xMidYMid meet',
+    role: 'img',
+  }, children.filter(Boolean));
+  // role="img" بدون نام دسترس‌پذیر = تخلف WCAG. diagram() عنوان واقعی را
+  // می‌گذارد؛ این فقط «کفِ تضمین» است تا هیچ مسیری بدون برچسب نماند.
+  if (!figure.getAttribute('aria-label')) figure.setAttribute('aria-label', 'دیاگرام آموزشی');
+  return el('div', { class: 'svg-scroll' }, [figure]);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -623,6 +626,34 @@ type Keys = keyof typeof settings;
       { title: 'با as const', icon: '🔒', tone: 'green', rows: ['theme: "dark"', 'items: readonly ["a","b"]', 'غیرقابل تغییر', 'لیترال‌های دقیق + قابل مشتق‌سازی'] },
     ],
   },
+
+  'keyof-flow': {
+    kind: 'anatomy',
+    code: `type StudyPlan = {
+  topic: string;      // 1
+  minutes: number;    // 1
+  done: boolean;      // 1
+};
+
+const plan: StudyPlan = { topic: 'Generics', minutes: 50, done: false };
+
+type PlanKey = keyof StudyPlan;   // 2
+//   ^?  → "topic" | "minutes" | "done"
+
+const key: PlanKey = 'minutes';   // 3
+const value = plan[key];          // 4
+//    ^?  → string | number | boolean
+
+type FnKey = keyof (x: number) => string;  // 5
+//   ^?  → never`,
+    parts: [
+      'هر کلید آبجکت یک عضو از Union نتیجه است؛ `keyof` «مجموعه‌ی نام کلیدها» را می‌سازد نه مقدارها را',
+      'نتیجه یک Union از **لیترال‌های رشته** است — پس هر کلید اشتباه، در زمان کامپایل خطا می‌دهد',
+      'متغیر فقط می‌تواند یکی از همان کلیدها باشد؛ نوشتن `"topc"` خطای TS2322 می‌دهد',
+      'دسترسی ایندکسی با کلید معتبر، تایپِ Unionِ همه‌ی آن کلیدها را برمی‌گرداند (اینجا `string | number | boolean`)',
+      'برای تایپ‌های بدون کلید (مثل تابع) نتیجه `never` است — یعنی «هیچ کلیدی وجود ندارد»',
+    ],
+  },
 };
 
 /** Renders a diagram by key; returns null when the key is unknown. */
@@ -631,7 +662,18 @@ export function diagram(key) {
   if (!spec) return null;
   const renderer = RENDERERS[spec.kind];
   if (!renderer) return null;
-  return el('div', { class: `diagram diagram-${spec.kind}` }, [renderer(spec)]);
+  const node = el('div', { class: `diagram diagram-${spec.kind}` }, [renderer(spec)]);
+
+  /* svgها role="img" دارند، پس طبق WCAG باید «نام دسترس‌پذیر» داشته باشند.
+     عنوان دیاگرام را هم به‌صورت aria-label و هم به‌صورت <title> (که باید
+     اولین فرزند svg باشد) می‌دهیم تا صفحه‌خوان و tooltip هر دو کار کنند. */
+  const figure = node.querySelector('svg.diagram-svg');
+  if (figure && spec.title) {
+    figure.setAttribute('aria-label', spec.title);
+    figure.insertBefore(svg('title', { text: spec.title }), figure.firstChild);
+  }
+
+  return node;
 }
 
 export function diagramKeys() {

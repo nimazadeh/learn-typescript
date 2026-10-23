@@ -920,8 +920,7 @@ console.log(pipeline.join(' → '));`,
   "tabWidth": 2,
   "arrowParens": "always",
   "endOfLine": "lf"
-}
-console.log('prettier config');`,
+}`,
       },
       {
         h: 'گام ۲ — نکات مخصوص TypeScript در Prettier',
@@ -941,6 +940,7 @@ console.log(x);`,
         h: 'گام ۳ — اجرا خودکار: editor، pre-commit و CI',
         p:
           'سه لایه: ۱) format-on-save در ادیتور. ۲) `lint-staged` + `husky` در pre-commit. ۳) `prettier --check .` در CI. با این سه، هیچ کد بدفرمتی وارد ریپو نمی‌شود.',
+        lang: 'json',
         code: `// .husky/pre-commit
 // npx lint-staged
 
@@ -948,8 +948,7 @@ console.log(x);`,
 { "*.{ts,tsx,js,json,md,css}": "prettier --write" }
 
 // CI:
-// npx prettier --check .
-console.log('hooks configured');`,
+// npx prettier --check .`,
       },
       {
         h: 'گام ۴ — `.prettierignore`',
@@ -1373,8 +1372,7 @@ console.log('verify pipeline defined');`,
   "types": "./dist/index.d.ts",
   "files": ["dist"],
   "sideEffects": false
-}
-console.log('package manifest ready');`,
+}`,
       },
       {
         h: 'گام ۴ — مونورپو: Project References و build incrementی',

@@ -9,9 +9,11 @@ import { LessonView } from './views/lessonView.js';
 import { PlaygroundView } from './views/playgroundView.js';
 import { CoachView } from './views/coachView.js';
 import { PlaybookView } from './views/playbookView.js';
-import { ALL_LESSONS, CHAPTER_BY_ID, CURRICULUM_STATS, TOTAL_DAYS } from './data/curriculum/index.js';
+import { ALL_LESSONS, CHAPTER_BY_ID } from './data/curriculum/index.js';
 import { SUCCESS_FORMULAS, INTERVIEW_BANK, FLASHCARDS } from './data/playbook.js';
 import { engineLabel } from './services/compiler.js';
+import { HeaderTimer } from './components/headerTimer.js';
+import { reviveTimer } from './services/timer.js';
 
 const VIEWS = {
   roadmap: { label: 'نقشه‌ی راه', icon: '🗺️', factory: RoadmapView },
@@ -27,6 +29,7 @@ const progressFill = document.getElementById('header-progress-fill');
 const progressText = document.getElementById('header-progress-text');
 const engineBadge = document.getElementById('engine-badge');
 const themeToggle = document.getElementById('theme-toggle');
+const timerSlot = document.getElementById('header-timer');
 
 let currentView = null;
 let currentName = null;
@@ -52,8 +55,13 @@ export function navigate(name, params = {}) {
   requestAnimationFrame(() => main.classList.remove('is-loading'));
 
   document.querySelectorAll('.nav-tab').forEach((tab) => {
-    tab.classList.toggle('is-active', tab.dataset.view === name);
-    tab.setAttribute('aria-selected', String(tab.dataset.view === name));
+    const active = tab.dataset.view === name;
+    tab.classList.toggle('is-active', active);
+    // دکمه‌ی جست‌وجو (ghost-tab) هیچ dataset.view ندارد و «نمای جاری» نیست
+    if (tab.dataset.view) {
+      if (active) tab.setAttribute('aria-current', 'page');
+      else tab.removeAttribute('aria-current');
+    }
   });
 
   if (name === 'academy' && params.nodeId) {
@@ -70,7 +78,6 @@ function buildNav() {
       el('button', {
         class: 'nav-tab',
         dataset: { view: key },
-        role: 'tab',
         onclick: () => navigate(key),
         title: view.label,
       }, [
@@ -311,6 +318,9 @@ function bootFromHash() {
 async function boot() {
   const prefs = getState().prefs;
   applyTheme(prefs.theme ?? 'dark');
+  // تایمر سراسری پیش از هر نمایی بالا می‌آید؛ اگر از قبل در جریان بود، ادامه پیدا می‌کند
+  reviveTimer();
+  render(timerSlot, HeaderTimer());
   buildNav();
   buildSearchIndex();
   refreshHeader();

@@ -6,7 +6,7 @@
 import { el, render, debounce, toFa } from '../core/dom.js';
 import { highlightedLines } from '../core/highlight.js';
 import { compile, runJavaScript, engineLabel } from '../services/compiler.js';
-import { saveLab, getState } from '../core/store.js';
+import { getState, setState, saveLab } from '../core/store.js';
 import { codeBlock, richText } from './ui.js';
 
 const DEFAULT_FLAGS = {
@@ -220,6 +220,8 @@ export class LiveLab {
 
     try {
       const result = await compile(this.code, this.flags);
+      // هر کامپایل موفق = یک اجرای واقعی آزمایشگاه (KPI «اجرای آزمایشگاه زنده»)
+      setState((prev) => ({ labRuns: (prev.labRuns ?? 0) + 1 }));
       this.renderDiagnostics(result);
       this.renderXRay(result);
       this.renderJs(result);
@@ -386,7 +388,7 @@ export class LiveLab {
         el('strong', { text: 'هیچ اثری از تایپ‌ها نمانده' }),
         ' — این یعنی TypeScript هیچ سربار اجرایی ندارد.',
       ]),
-      codeBlock({ title: 'خروجی کامپایل (JavaScript)', code: js }),
+      codeBlock({ title: 'خروجی کامپایل (JavaScript)', code: js, lang: 'js' }),
     );
   }
 

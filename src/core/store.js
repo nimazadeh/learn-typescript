@@ -16,6 +16,18 @@ const DEFAULT_STATE = {
   flashcardProgress: {},       // { [cardId]: { box: 0..5, due: 'YYYY-MM-DD' } }
   solvedChallenges: {},
   labRuns: 0,
+  quizSolved: {},              // { [nodeId]: true } کوییزهایی که پاسخ داده شده‌اند
+  pomodorosDone: 0,            // تعداد شمارش‌های معکوسی که امروز شروع شده‌اند
+  pomodoro: {                  // تایمر سراسری (پومودورو و بلوک‌های مربی)
+    running: false,
+    endsAt: null,              // مهر زمانی پایان — باعث می‌شود رفرش صفحه تایمر را نکُشد
+    remainingMs: 0,
+    totalMs: 0,
+    label: '',
+    kind: '',
+    silent: false,
+    finished: 0,
+  },
   studyLog: {},                // { 'YYYY-MM-DD': { minutes, sessions, blocks: [0..4] } }
   timer: { blockIndex: 0, remaining: 3000, running: false },
   prefs: { sound: true, density: 'comfortable', showMarginNotes: true, theme: 'dark' },
@@ -126,6 +138,20 @@ export function recordQuiz(correct) {
       wrong: s.quizStats.wrong + (correct ? 0 : 1),
     },
   }));
+}
+
+/**
+ * نتیجه‌ی کوییز یک درس را نگه می‌دارد تا بعداً هم دیده شود
+ * (کدام درس‌ها پاسخ داده شده‌اند و آیا درست بوده‌اند).
+ */
+export function recordLessonQuiz(nodeId, correct) {
+  if (!nodeId) return;
+  setState((s) => ({ quizSolved: { ...s.quizSolved, [nodeId]: correct } }));
+}
+
+/** نتیجه‌ی ذخیره‌شده‌ی کوییز یک درس: true/false یا undefined اگر پاسخ نداده باشد. */
+export function quizSolvedOf(nodeId) {
+  return getState().quizSolved?.[nodeId];
 }
 
 export function logStudyMinutes(minutes) {

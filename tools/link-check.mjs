@@ -10,10 +10,12 @@
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
 
-const requireShim = createRequire(pathToFileURL(path.join(process.cwd(), 'noop.js')).href);
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+// بعد از همه‌ی importها ساخته می‌شود (ESM همه را hoist می‌کند، ولی ترتیب خوانا مهم است)
+const requireShim = createRequire(pathToFileURL(path.join(process.cwd(), 'noop.js')).href);
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SKIP_DIRS = new Set(['node_modules', '.git', '.cache', 'dist', 'build', 'coverage']);

@@ -43,7 +43,7 @@ type Identity = { readonly id: string };
 
 type BaseEntity = Identity & Timestamps;
 type Post = BaseEntity & { readonly title: string };
-type Comment = BaseEntity & { readonly body: string; readonly postId: string };
+type AppComment = BaseEntity & { readonly body: string; readonly postId: string };
 
 const post: Post = {
   id: 'p1', createdAt: new Date(0), updatedAt: new Date(0), title: 'TypeScript',

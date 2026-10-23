@@ -5,13 +5,9 @@
    اجرا:  npm run smoke   (سرور باید در حال اجرا باشد: npm start)
    ========================================================================== */
 
-import { JSDOM, VirtualConsole } from 'jsdom';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-
-const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
-const ORIGIN = process.env.SMOKE_ORIGIN ?? 'http://127.0.0.1:3000';
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+import { createStudioEnv, ROOT } from './dom-env.mjs';
 
 /* -------------------------------------------------------------------------- */
 /* گزارش‌دهی                                                                     */
@@ -31,141 +27,8 @@ function section(title) {
   console.log(`\n— ${title} —`);
 }
 
-/* -------------------------------------------------------------------------- */
-/* خطاهای کنسول و خطاهای نگرفته‌شده را به‌عنوان شکست ثبت می‌کنیم                  */
-/* -------------------------------------------------------------------------- */
-const consoleErrors = [];
-const virtualConsole = new VirtualConsole();
-virtualConsole.on('jsdomError', (e) => consoleErrors.push(`jsdomError: ${e.message}`));
-virtualConsole.on('error', (...args) => consoleErrors.push(`console.error: ${args.join(' ')}`));
-
-const dom = new JSDOM(readFileSync(join(ROOT, 'index.html'), 'utf8'), {
-  url: `${ORIGIN}/`,
-  pretendToBeVisual: true,
-  virtualConsole,
-});
-const { window } = dom;
-const { document } = window;
-
-/* -------------------------------------------------------------------------- */
-/* شیم APIهای مرورگر که jsdom ندارد (بدون آن‌ها تست بی‌دلیل می‌شکند)              */
-/* -------------------------------------------------------------------------- */
-function shimBrowserApis() {
-  window.Element.prototype.scrollIntoView = function scrollIntoView() {};
-  window.Element.prototype.setPointerCapture = function setPointerCapture() {};
-  window.Element.prototype.releasePointerCapture = function releasePointerCapture() {};
-  window.Element.prototype.hasPointerCapture = function hasPointerCapture() { return false; };
-  window.SVGElement.prototype.setPointerCapture = function setPointerCapture() {};
-  window.SVGElement.prototype.releasePointerCapture = function releasePointerCapture() {};
-
-  window.URL.createObjectURL = () => 'blob:ts-studio-stub';
-  window.URL.revokeObjectURL = () => {};
-
-  window.AudioContext = class StubAudioContext {
-    constructor() { this.currentTime = 0; this.state = 'running'; this.destination = {}; }
-    createOscillator() { return { connect() {}, start() {}, stop() {}, frequency: { setValueAtTime() {}, exponentialRampToValueAtTime() {}, value: 440 }, type: 'sine' }; }
-    createGain() { return { connect() {}, gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {}, linearRampToValueAtTime() {}, value: 1 } }; }
-    resume() { return Promise.resolve(); }
-    close() { return Promise.resolve(); }
-  };
-
-  Object.defineProperty(window.navigator, 'clipboard', {
-    configurable: true,
-    value: { writeText: () => Promise.resolve() },
-  });
-
-  // اجرای JS کاربر در Worker ایزوله انجام می‌شود. jsdom Worker واقعی ندارد،
-  // پس «دقیقاً همان قرارداد پیام» را شبیه‌سازی می‌کنیم:
-  //   postMessage({ code }) → onmessage({ ok, logs: [{kind,text}], runtimeMs, error? })
-  window.Worker = class StubWorker {
-    constructor() { this.onmessage = null; this.onerror = null; }
-    postMessage(payload) {
-      const logs = [];
-      const started = Date.now();
-      const fakeConsole = {
-        log: (...a) => logs.push({ kind: 'log', text: a.map(String).join(' ') }),
-        info: (...a) => logs.push({ kind: 'info', text: a.map(String).join(' ') }),
-        warn: (...a) => logs.push({ kind: 'warn', text: a.map(String).join(' ') }),
-        error: (...a) => logs.push({ kind: 'error', text: a.map(String).join(' ') }),
-        table: (...a) => logs.push({ kind: 'log', text: a.map(String).join(' ') }),
-      };
-      const reply = (ok, error) => queueMicrotask(() => {
-        this.onmessage?.({ data: { ok, logs, error: error ?? null, runtimeMs: Date.now() - started } });
-      });
-      try {
-        const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-        const fn = new AsyncFunction('console', 'performance', payload.code);
-        Promise.resolve(fn(fakeConsole, { now: () => Date.now() - started }))
-          .then(() => reply(true), (err) => reply(false, err?.message ?? String(err)));
-      } catch (err) {
-        reply(false, err?.message ?? String(err));
-      }
-    }
-    terminate() {}
-    addEventListener(type, handler) { if (type === 'message') this.onmessage = handler; }
-    removeEventListener() {}
-  };
-}
-
-function exposeGlobals() {
-  const names = [
-    'window', 'document', 'navigator', 'location', 'history', 'localStorage', 'sessionStorage',
-    'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'Element', 'Node', 'Event',
-    'CustomEvent', 'KeyboardEvent', 'MouseEvent', 'PointerEvent', 'Blob', 'FileReader',
-    'URLSearchParams', 'DOMParser', 'SVGElement', 'getComputedStyle', 'requestAnimationFrame',
-    'cancelAnimationFrame', 'matchMedia', 'Worker', 'AudioContext',
-  ];
-  for (const name of names) {
-    const value = name === 'window' ? window : window[name];
-    if (value === undefined) continue;
-    // برخی کلیدها (مثل navigator) در Node فقط getter دارند
-    Object.defineProperty(globalThis, name, { value, writable: true, configurable: true });
-  }
-  Object.defineProperty(globalThis, 'URL', { value: window.URL, writable: true, configurable: true });
-
-  // fetch نسبی را به سرور واقعی استودیو وصل می‌کنیم تا موتور TypeScript واقعی تست شود
-  const nodeFetch = globalThis.fetch;
-  globalThis.fetch = (input, init) => {
-    const url = typeof input === 'string'
-      ? (input.startsWith('http') ? input : ORIGIN + (input.startsWith('/') ? input : `/${input}`))
-      : input;
-    return nodeFetch(url, init);
-  };
-}
-
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function waitFor(predicate, { timeout = 10000, label = 'condition', debug } = {}) {
-  const started = Date.now();
-  while (Date.now() - started < timeout) {
-    if (predicate()) return true;
-    await wait(50);
-  }
-  const extra = typeof debug === 'function' ? `\n    debug: ${debug()}` : '';
-  throw new Error(`timeout waiting for ${label}${extra}`);
-}
-
-/* -------------------------------------------------------------------------- */
-/* اجرا                                                                        */
-/* -------------------------------------------------------------------------- */
-shimBrowserApis();
-exposeGlobals();
-
-let app;
-let store;
-try {
-  app = await import(pathToFileURL(join(ROOT, 'src/app.js')).href);
-  store = await import(pathToFileURL(join(ROOT, 'src/core/store.js')).href);
-} catch (error) {
-  console.log(`✗ بارگذاری src/app.js شکست خورد: ${error.stack ?? error.message}`);
-  process.exit(1);
-}
-
-await wait(300);
-
-const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => [...document.querySelectorAll(sel)];
-const count = (sel) => $$(sel).length;
+const env = await createStudioEnv();
+const { window, document, app, store, timer, consoleErrors, wait, waitFor, $, $$, count } = env;
 
 section('پوسته‌ی اپلیکیشن');
 check('سربرگ و نوار ناوبری ساخته شد', count('.nav-tab') >= 5, `${count('.nav-tab')} سربرگ`);
@@ -216,7 +79,7 @@ section('آزمایشگاه زنده — کامپایل با TypeScript واقع
   // چهار پنل به ترتیب ثابت ساخته می‌شوند: کنسول، خطاها، X-Ray، خروجی JS
   const panes = [...lab.querySelectorAll('.lab-tab-body > .pane-body')];
   check('هر چهار پنل آزمایشگاه در DOM حاضرند', panes.length === 4, `${panes.length} پنل`);
-  const [consolePane, diagPane, xrayPane, jsPane] = panes;
+  const [consolePane, diagPane, _xrayPane, jsPane] = panes;
   const visiblePane = () => panes.find((pane) => pane.hidden === false);
 
   // اول صبر می‌کنیم اجرای خودکارِ کد اولیه تمام شود تا نتیجه‌ی تست قاطی نشود
@@ -270,6 +133,7 @@ section('آزمایشگاه زنده — کامپایل با TypeScript واقع
     'const plan = [daily, daily];',
     '//    ^?',
     'const total: number = plan.reduce((a, b) => a + b, 0);',
+    // eslint-disable-next-line no-template-curly-in-string -- این رشته «کد TypeScript نمونه» است، نه قالب جاوااسکریپت
     'console.log(`plan=${plan.length} total=${total}`);',
   ].join('\n');
   editor.dispatchEvent(new window.Event('input', { bubbles: true }));
@@ -364,11 +228,181 @@ section('مربی روزانه و برنامه‌ی ۵ ساعت');
   check('تایمر متوقف شد', $$('#view-root .timer-controls button').some((b) => /شروع بلوک/.test(b.textContent)));
 
   // ثبت دقیقه‌های مطالعه: با «بلوک بعدی» جابه‌جا می‌شویم تا منطق ثبت دقیقه سنجیده شود
-  const minutesBefore = store.todayEntry().minutes ?? 0;
   const skipBtn = $$('#view-root .timer-controls button').find((b) => /بلوک بعدی/.test(b.textContent));
   skipBtn.click();
   await wait(150);
   check('با رفتن به بلوک بعد، تایمر روی ۵۰ دقیقه بازنشانی شد', $('#view-root .timer-clock')?.textContent === '50:00', $('#view-root .timer-clock')?.textContent);
+}
+
+section('تایمر پومودورو سراسری — شمارش معکوس دلخواه');
+{
+  app.navigate('roadmap');
+  await wait(150);
+
+  const headerTimer = $('#header-timer .htimer');
+  check('تایمر در سربرگ سوار شده (سراسری، نه داخل یک نما)', Boolean(headerTimer));
+  const openBtn = $('#header-timer .htimer-open');
+  check('دکمه‌ی بازکردن تنظیمات تایمر هست و aria دارد',
+    Boolean(openBtn) && openBtn.getAttribute('aria-haspopup') === 'dialog' && openBtn.getAttribute('aria-expanded') === 'false');
+
+  openBtn.click();
+  await wait(80);
+  check('پاپ‌اور تنظیم مدت باز شد', $('#header-timer .htimer-popover')?.hidden === false);
+  check('مدت‌های آماده شامل ۲۵ دقیقه‌ی پومودورو است',
+    $$('#header-timer .htimer-preset').map((b) => b.dataset.minutes).includes('25'),
+    $$('#header-timer .htimer-preset').map((b) => b.dataset.minutes).join(','));
+  check('ورودی مدت دلخواه وجود دارد (هر عددی، نه فقط preset)', Boolean($('#header-timer .htimer-custom-input')));
+
+  // مدت دلخواه و کوچک تا شمارش معکوس سریع و قطعی سنجیده شود
+  const custom = $('#header-timer .htimer-custom-input');
+  custom.value = '1';
+  custom.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await wait(60);
+  check('برای مدت دلخواه هیچ preset انتخاب‌شده‌ای نمی‌ماند (ورودی آزاد است)',
+    $$('#header-timer .htimer-preset').every((b) => !b.classList.contains('is-selected')));
+  // و برعکس: زدن preset، ورودی دلخواه را هم‌رنگ خودش می‌کند
+  $$('#header-timer .htimer-preset').find((b) => b.dataset.minutes === '25').click();
+  await wait(60);
+  check('زدن preset ۲۵ هم ورودی را پر می‌کند هم هایلایت می‌شود',
+    $('#header-timer .htimer-custom-input').value === '25'
+      && $$('#header-timer .htimer-preset').some((b) => b.dataset.minutes === '25' && b.classList.contains('is-selected')));
+  custom.value = '1';
+  custom.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await wait(60);
+
+  const runsBefore = store.getState().pomodorosDone ?? 0;
+  $('#header-timer .htimer-start').click();
+  await wait(120);
+
+  check('پاپ‌اور پس از شروع بسته شد', $('#header-timer .htimer-popover')?.hidden === true);
+  check('شمارش معکوس با ۰۱:۰۰ شروع شد (قالب mm:ss)', $('#header-timer .htimer-clock')?.textContent === '01:00', $('#header-timer .htimer-clock')?.textContent);
+  check('شمارنده‌ی پومودوروها یکی زیاد شد', (store.getState().pomodorosDone ?? 0) === runsBefore + 1);
+
+  await wait(1250);
+  const after = $('#header-timer .htimer-clock')?.textContent;
+  check('واقعاً معکوس می‌شمارد (۰۱:۰۰ → ۰۰:۵۹)', after === '00:59', after);
+  check('حلقه‌ی پیشرفت با گذشت زمان جلو رفته است',
+    Number($('#header-timer .htimer-ring-fill')?.getAttribute('stroke-dashoffset')) < 81,
+    $('#header-timer .htimer-ring-fill')?.getAttribute('stroke-dashoffset'));
+
+  // تایمر باید از جابه‌جایی بین نماها جان سالم به در ببرد
+  const beforeNav = $('#header-timer .htimer-clock')?.textContent;
+  app.navigate('academy', { nodeId: 'union-types' });
+  await wait(200);
+  app.navigate('playground');
+  await wait(200);
+  check('تایمر پس از جابه‌جایی بین نماها زنده ماند',
+    $('#header-timer .htimer-clock')?.textContent !== undefined && store.getState().pomodoro?.running === true,
+    `${beforeNav} → ${$('#header-timer .htimer-clock')?.textContent}`);
+
+  // توقف / ادامه
+  $('#header-timer .htimer-toggle').click();
+  await wait(120);
+  check('با توقف، اجرا متوقف شد', store.getState().pomodoro?.running === false);
+  const pausedAt = $('#header-timer .htimer-clock')?.textContent;
+  await wait(600);
+  check('در حالت توقف، زمان جلو نمی‌رود', $('#header-timer .htimer-clock')?.textContent === pausedAt, `${pausedAt} → ${$('#header-timer .htimer-clock')?.textContent}`);
+  $('#header-timer .htimer-toggle').click();
+  await wait(120);
+  check('با ادامه، دوباره در حال اجرا شد', store.getState().pomodoro?.running === true);
+
+  // پایان تایمر → هشدار ملایم (به‌صورت قطعی با گذشته‌نگری endsAt)
+  store.setState((prev) => ({ pomodoro: { ...prev.pomodoro, endsAt: Date.now() - 1000 } }));
+  check('reconcile پایان تایمر را تشخیص داد', timer.reconcile() === true);
+  await wait(150);
+  check('پس از پایان، زمان صفر نمایش داده شد', $('#header-timer .htimer-clock')?.textContent === '00:00', $('#header-timer .htimer-clock')?.textContent);
+  check('پیام پایان (toast) به کاربر نشان داده شد', count('body .toast') >= 1, $$('.toast').map((t) => t.textContent).join(' | ').slice(0, 90));
+  check('وضعیت «تمام‌شده» روی تایمر نشست', $('#header-timer .htimer')?.classList.contains('is-done') === true);
+  check('تایمر تمام‌شده دیگر اجرا نمی‌شود', store.getState().pomodoro?.running === false);
+
+  // بی‌صدا کردن
+  const soundBtn = $('#header-timer .htimer-sound');
+  const soundBefore = store.getState().prefs?.sound !== false;
+  soundBtn.click();
+  await wait(80);
+  check('دکمه‌ی صدا، ترجیح کاربر را عوض کرد', (store.getState().prefs?.sound !== false) === !soundBefore);
+  check('aria-pressed دکمه‌ی صدا به‌روز شد', soundBtn.getAttribute('aria-pressed') === String(!soundBefore));
+  soundBtn.click();
+  await wait(80);
+
+  $('#header-timer .htimer-cancel').click();
+  await wait(120);
+  check('با لغو، تایمر از سربرگ پنهان شد', $('#header-timer .htimer-active')?.hidden === true);
+}
+
+section('بازنمایی بصری درس‌ها');
+{
+  const { ALL_LESSONS } = await import(pathToFileURL(join(ROOT, 'src/data/curriculum/index.js')).href);
+  const diagrams = await import(pathToFileURL(join(ROOT, 'src/components/diagrams.js')).href);
+
+  const badKeys = ALL_LESSONS.filter((l) => l.visual && !diagrams.diagramKeys().includes(l.visual));
+  check('کلید visual همه‌ی درس‌ها واقعاً وجود دارد', badKeys.length === 0, badKeys.map((l) => `${l.id}→${l.visual}`).join(', '));
+
+  const withVisual = ALL_LESSONS.filter((l) => l.visual);
+  let emptyBoxes = 0;
+  let rendered = 0;
+  for (const lesson of withVisual) {
+    app.navigate('academy', { nodeId: lesson.id });
+    await wait(0);
+    const box = $('.lesson-visual');
+    if (!box) { emptyBoxes++; continue; }
+    if (box.querySelector('.diagram')) rendered++;
+    else emptyBoxes++;
+  }
+  check(`جعبه‌ی «بازنمایی بصری» هیچ درس خالی نیست (${rendered}/${withVisual.length})`, emptyBoxes === 0, `${emptyBoxes} جعبه‌ی خالی`);
+
+  // درسی بدون visual نباید جعبه‌ی خالی بسازد
+  const withoutVisual = ALL_LESSONS.filter((l) => !l.visual)[0];
+  app.navigate('academy', { nodeId: withoutVisual.id });
+  await wait(50);
+  check(`درس بدون دیاگرام (${withoutVisual.id}) جعبه‌ی خالی نمی‌سازد`, count('.lesson-visual') === 0);
+}
+
+section('آمار زنده — KPIهایی که قبلاً صفر می‌ماندند');
+{
+  app.navigate('academy', { nodeId: 'union-types' });
+  await wait(250);
+  const runsBefore = store.getState().labRuns ?? 0;
+  const lab = $('.live-lab');
+  const editor = lab.querySelector('.editor-input');
+  editor.value = 'const kpiProbe: number = 1;\nconsole.log(kpiProbe);';
+  editor.dispatchEvent(new window.Event('input', { bubbles: true }));
+  const runButton = [...lab.querySelectorAll('.lab-actions button')].find((b) => /اجرا/.test(b.textContent));
+  runButton.click();
+  await waitFor(() => (store.getState().labRuns ?? 0) > runsBefore, { label: 'labRuns increase', timeout: 15000 });
+  check('اجرای آزمایشگاه، KPI «labRuns» را افزایش داد', (store.getState().labRuns ?? 0) > runsBefore, `${runsBefore} → ${store.getState().labRuns}`);
+
+  const { WEEKLY_KPIS, kpiActual } = await import(pathToFileURL(join(ROOT, 'src/data/playbook.js')).href);
+  const actual = kpiActual(store.getState(), (id) => Boolean(store.getState().labSaves[id] ?? true));
+  check('هر KPI هفتگی یک منبع محاسبه‌شده‌ی واقعی دارد',
+    WEEKLY_KPIS.every((k) => Number.isFinite(actual[k.key])),
+    WEEKLY_KPIS.map((k) => `${k.key}=${actual[k.key]}`).join(', '));
+  check('KPI اجرای آزمایشگاه واقعاً از صفر گذشته است', actual.labRuns > 0, `labRuns=${actual.labRuns}`);
+  check('KPI پومودورو با همین تست افزایش یافته است', actual.pomodoros > 0, `pomodoros=${actual.pomodoros}`);
+  check('KPI دقت کوییز با پاسخ‌های قبلی پر شده است', actual.quizAccuracy > 0, `quizAccuracy=${actual.quizAccuracy}`);
+}
+
+section('کوییز per-lesson');
+{
+  const PROBE_LESSON = 'intersection-types';
+  app.navigate('academy', { nodeId: PROBE_LESSON });
+  await wait(200);
+  const solvedBefore = store.getState().quizSolved?.[PROBE_LESSON];
+  $$('.quiz-card .quiz-option')[0].click();
+  await wait(150);
+  const solvedAfter = store.getState().quizSolved?.[PROBE_LESSON];
+  check('نتیجه‌ی کوییز برای همان درس ذخیره شد', solvedBefore === undefined && typeof solvedAfter === 'boolean', `${solvedBefore} → ${solvedAfter}`);
+  check('نشان کوییز در فهرست درس‌ها ظاهر شد', count('.lesson-quiz-badge') >= 1, `${count('.lesson-quiz-badge')} نشان`);
+
+  // بازگردانی: با ورود دوباره به همان درس، نتیجه باید برگردد نه کوییز خام
+  app.navigate('roadmap');
+  await wait(120);
+  app.navigate('academy', { nodeId: PROBE_LESSON });
+  await wait(200);
+  check('کوییز پاسخ‌داده‌شده، بازگردانی شد (دوباره خام نیست)',
+    $('.quiz-card')?.classList.contains('is-answered') === true && $$('.quiz-option').every((b) => b.disabled),
+  );
+  check('توضیح پاسخ هنگام بازگردانی هم دیده می‌شود', ($('.quiz-feedback')?.textContent ?? '').trim().length > 20);
 }
 
 section('پوشش کامل محتوا در DOM');

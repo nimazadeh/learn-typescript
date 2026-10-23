@@ -3,13 +3,6 @@
    · tsconfig · Compiler Options · Running TS · tsc · ts-node · Playground)
    ========================================================================== */
 
-const CH1_META = {
-  id: 'ch1',
-  title: 'فصل ۱ — مبانی و ابزارها',
-  phase: 'زیرساخت ذهنی',
-  day: 1,
-};
-
 export const PART1_LESSONS = [
   {
     id: 'intro-ts',
@@ -48,6 +41,7 @@ const user: User = { name: 'Nima', age: 30 };
 console.log(user.name);`,
       },
     ],
+    visual: 'eraser',
     margins: [
       {
         kind: 'formula',
@@ -122,6 +116,7 @@ console.log(raw.id); // زمان اجرا: "oops" (رشته!) — کامپایل
         p: 'پروژه‌ی بیش از یک هفته عمر، بیش از ۲ نفر تیم، یا بیش از ۵۰۰ خط کد → TypeScript اجباری. اسکریپت یک‌بارمصرف ۲۰ خطی → JavaScript خالص کافی و سریع‌تر است.',
       },
     ],
+    visual: 'compare',
     margins: [
       {
         kind: 'formula',
@@ -210,6 +205,7 @@ declare module 'legacy-lib' {
         p: '۱) `allowJs: true` بدون strict ۲) افزودن `.d.ts` برای مرزها ۳) فعال‌کردن `strictNullChecks` ۴) تبدیل فایل‌های هسته به `.ts` ۵) فعال‌کردن `strict: true` کامل و حذف `any`های باقی‌مانده.',
       },
     ],
+    visual: 'interop',
     margins: [
       {
         kind: 'method',
@@ -244,11 +240,23 @@ declare module 'legacy-lib' {
     },
     lab: {
       task: 'یک ماژول بدون تایپ را با `declare module` تعریف کن و از آن با تایپ امن استفاده کن.',
-      starter: `declare module 'old-analytics' {
+      starter: `// ⚠️ declare module فقط در فایلی که «ماژول» نباشد یک Ambient Module می‌سازد.
+// اگر همین فایل import/export واقعی داشته باشد، عبارت تبدیل به
+// Module Augmentation می‌شود و چون ماژول واقعی وجود ندارد، TS2664 می‌دهد.
+// در پروژه‌ی واقعی این بلوک را در یک فایل جدا مثل types/old-analytics.d.ts
+// می‌گذاری و با /// <reference path> یا include به tsconfig معرفی‌اش می‌کنی.
+declare module 'old-analytics' {
   export function track(event: string, payload?: Record<string, unknown>): void;
 }
 
-import { track } from 'old-analytics';
+// حالا «نوع» آن ماژول در دسترس ماست. typeof import(...) فقط تایپ را
+// می‌گیرد و در خروجی JavaScript پاک می‌شود؛ پس هیچ بارگذاری واقعی رخ
+// نمی‌دهد و کد هم در مرورگر و هم در آزمایشگاه زنده قابل اجرا می‌ماند.
+type Analytics = typeof import('old-analytics');
+
+const track: Analytics['track'] = (event, payload) => {
+  console.log('track →', event, payload);
+};
 
 track('lesson_completed', { lessonId: 'ts-js-interop' });
 console.log('tracked');`,
@@ -290,6 +298,7 @@ npx tsc --version       # Version 5.9.3`,
 }`,
       },
     ],
+    visual: 'folders',
     margins: [
       {
         kind: 'cleancode',
@@ -385,6 +394,7 @@ console.log(scaffold.scripts.join(' | '));`,
 }`,
       },
     ],
+    visual: 'tsconfig',
     margins: [
       {
         kind: 'formula',
@@ -483,6 +493,7 @@ console.log(first?.toFixed(1));     // ✅ "18.0"`,
         p: '`esModuleInterop` برای import پیش‌فرض پکیج‌های CommonJS، `verbatimModuleSyntax` برای صریح‌کردن `import type`، و `isolatedModules` برای سازگاری با ترنسپایلرهای تک‌فایلی مثل esbuild.',
       },
     ],
+    visual: 'flags',
     margins: [
       {
         kind: 'formula',
@@ -560,6 +571,7 @@ npm run build && npm start`,
         p: '`tsx` و `ts-node --swc` فقط تایپ‌ها را پاک می‌کنند و **هیچ خطای تایپی نمی‌دهند**. این سریع است ولی می‌تواند کد ناسالم را اجرا کند. پس در CI همیشه یک `tsc --noEmit` جداگانه لازم است.',
       },
     ],
+    visual: 'pipeline',
     margins: [
       {
         kind: 'formula',
@@ -634,6 +646,7 @@ npx tsc --init                # ساخت tsconfig با کامنت‌های را�
         p: 'هر خطای tsc چهار بخش دارد: فایل، موقعیت (خط،ستون)، کد خطا (TS2322)، و پیام. **همیشه از کد خطا شروع کن**؛ جست‌وجوی `TS2322` در داکیومنت رسمی، سریع‌ترین راه فهم ریشه است.',
       },
     ],
+    visual: 'terminal',
     margins: [
       {
         kind: 'method',
@@ -707,6 +720,7 @@ npx tsx --tsconfig tsconfig.dev.json src/index.ts`,
         p: 'پروداکشن → `tsc` و اجرای `dist`. توسعه‌ی محلی → `tsx watch`. اسکریپت Node با بررسی کامل → `ts-node`. CI → `tsc --noEmit`. REPL سریع → `tsx` بدون آرگومان.',
       },
     ],
+    visual: 'runners',
     margins: [
       {
         kind: 'trap',
@@ -789,6 +803,7 @@ type Keys = keyof typeof frozen;
         p: 'Playground یک URL کوتاه برای کد تو می‌سازد. این بهترین راه پرسیدن سؤال در Stack Overflow یا Discord است: به‌جای چسباندن کد، لینک Playground بفرست تا طرف مقابل همان نسخه‌ی کامپایلر و تنظیمات را ببیند.',
       },
     ],
+    visual: 'playground',
     margins: [
       {
         kind: 'method',

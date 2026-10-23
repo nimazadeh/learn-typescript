@@ -106,18 +106,18 @@ console.log(counter.increment(), counter.increment());`,
         'Arrow functionها `this`، `arguments`، `super` و `new.target` خودشان را ندارند. به همین دلیل برای callbackها امن‌ترین انتخاب‌اند.',
     },
     lab: {
-      task: 'یک تایپ تابع `Transformer<T>` بنویس و سه تابع تبدیل با آن تعریف کن.',
-      starter: `type Transformer<T> = (input: T) => T;
+      task: 'یک تایپ تابع `ValueMapper<T>` بنویس و سه تابع تبدیل با آن تعریف کن.',
+      starter: `type ValueMapper<T> = (input: T) => T;
 
-const trimText: Transformer<string> = (s) => s.trim();
-const doubleNumber: Transformer<number> = (n) => n * 2;
-const dedupeArray: Transformer<readonly string[]> = (list) => [...new Set(list)];
+const trimText: ValueMapper<string> = (s) => s.trim();
+const doubleNumber: ValueMapper<number> = (n) => n * 2;
+const dedupeArray: ValueMapper<readonly string[]> = (list) => [...new Set(list)];
 
 console.log(trimText('  hello  '));
 console.log(doubleNumber(21));
 console.log(dedupeArray(['a', 'b', 'a']));`,
-      solution: `type Transformer<T> = (input: T) => T;
-const trimText: Transformer<string> = (s) => s.trim();`,
+      solution: `type ValueMapper<T> = (input: T) => T;
+const trimText: ValueMapper<string> = (s) => s.trim();`,
     },
   },
 
@@ -521,7 +521,11 @@ console.log(s.serialize());`,
     },
     lab: {
       task: 'یک `Repository<T>` عمومی با سه متد async بنویس و یک پیاده‌سازی حافظه‌ای برایش بساز.',
-      starter: `type Entity = { readonly id: string };
+      starter: `// این فایل هیچ import/export واقعی ندارد، پس «اسکریپت» است نه «ماژول».
+// برای مجازشدن await در سطح بالا باید ماژولش کنیم (TS1375):
+export {};
+
+type Entity = { readonly id: string };
 
 interface Repository<T extends Entity> {
   findById(id: string): Promise<T | null>;
@@ -539,7 +543,23 @@ class InMemoryRepo<T extends Entity> implements Repository<T> {
 const repo = new InMemoryRepo<{ id: string; name: string }>();
 await repo.save({ id: '1', name: 'نیما' });
 console.log((await repo.findAll()).length);`,
-      solution: `class InMemoryRepo<T extends Entity> implements Repository<T> { ... }`,
+      solution: `// بدنه‌ی کامل همان starter است؛ فقط امضا را با دقت ببین:
+class InMemoryRepo<T extends Entity> implements Repository<T> {
+  private readonly store = new Map<string, T>();
+
+  async findById(id: string) {
+    return this.store.get(id) ?? null;
+  }
+
+  async findAll() {
+    return [...this.store.values()];
+  }
+
+  async save(entity: T) {
+    this.store.set(entity.id, entity);
+    return entity;
+  }
+}`,
     },
   },
 
@@ -1064,11 +1084,16 @@ console.log(new Factory('div').render(), Factory.version, Factory.create('span')
 
 function createFormatter(): Formatter {
   let locale = 'fa-IR';
-  const fn = (value: number) => \`\${locale}: \${value}\`;
-  return Object.assign(fn, {
+  // ⚠️ پیش از افزودن عضو به یک تابع، اول «جای» آن عضو را باز کن؛ وگرنه
+  // fn.locale = … خطای TS2339 می‌دهد، چون خودِ تابع هیچ پراپرتی ندارد.
+  const fn = Object.assign((value: number) => \`\${locale}: \${value}\`, {
     locale,
-    setLocale(next: string) { locale = next; fn.locale = next; },
+    setLocale(next: string) {
+      locale = next;
+      fn.locale = next;
+    },
   });
+  return fn;
 }
 
 const fmt = createFormatter();

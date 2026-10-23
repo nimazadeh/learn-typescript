@@ -139,7 +139,11 @@ console.log(Constants.MAX_HOURS, Constants.describe());`,
 
 const lesson = new Lesson('classes', 40);
 console.log(lesson.complete(), lesson.isCompleted);`,
-      solution: `class Lesson { readonly id: string; #minutes = 0; complete() { return this.id; } }`,
+      solution: `class Lesson {
+  constructor(readonly id: string) {}
+  #minutes = 0;
+  complete() { return this.id; }
+}`,
     },
   },
 
@@ -591,12 +595,12 @@ console.log(total([square, circle]).toFixed(2)); // هیچ کلاسی وجود �
         h: 'گام ۴ — چندریختی Ad-hoc (Overload) و چندریختی با Union',
         p:
           'Overload چندریختی بر اساس شکل ورودی است. Union + `switch` هم چندریختی داده‌محور است که امروز در TypeScript **ترجیح داده می‌شود** چون exhaustiveness دارد.',
-        code: `type Notification =
+        code: `type AppNotification =
   | { readonly kind: 'email'; readonly to: string }
   | { readonly kind: 'sms'; readonly phone: string }
   | { readonly kind: 'push'; readonly token: string };
 
-function send(n: Notification): string {
+function send(n: AppNotification): string {
   switch (n.kind) {
     case 'email': return \`email → \${n.to}\`;
     case 'sms': return \`sms → \${n.phone}\`;
@@ -657,14 +661,14 @@ console.log(send({ kind: 'sms', phone: '+98' }));`,
     },
     lab: {
       task: 'یک سیستم اعلان با Union + switch بنویس (بدون هیچ کلاسی) و با `assertNever` پوشش کامل را تضمین کن.',
-      starter: `type Notification =
+      starter: `type AppNotification =
   | { readonly kind: 'email'; readonly to: string; readonly subject: string }
   | { readonly kind: 'sms'; readonly phone: string }
   | { readonly kind: 'push'; readonly token: string; readonly silent?: boolean };
 
 function assertNever(v: never): never { throw new Error('unhandled: ' + JSON.stringify(v)); }
 
-function dispatch(n: Notification): string {
+function dispatch(n: AppNotification): string {
   switch (n.kind) {
     case 'email': return \`EMAIL \${n.to}: \${n.subject}\`;
     case 'sms': return \`SMS \${n.phone}\`;
@@ -675,7 +679,7 @@ function dispatch(n: Notification): string {
 
 console.log(dispatch({ kind: 'email', to: 'a@b.c', subject: 'سلام' }));
 console.log(dispatch({ kind: 'push', token: 'tk', silent: true }));`,
-      solution: `function dispatch(n: Notification): string {
+      solution: `function dispatch(n: AppNotification): string {
   switch (n.kind) {
     case 'email': return n.to;
     case 'sms': return n.phone;
@@ -1097,8 +1101,16 @@ const names = ['نیما', 'سارا'];
 const ages = [30, 25];
 console.log(zip(names, ages));`,
       solution: `function zip<A, B>(a: readonly A[], b: readonly B[]): [A, B][] {
-  return a.map((v, i) => [v, b[i] as B]).slice(0, b.length);
-}`,
+  const length = Math.min(a.length, b.length);
+  const pairs: [A, B][] = [];
+  for (let i = 0; i < length; i++) pairs.push([a[i] as A, b[i] as B]);
+  return pairs;
+}
+
+// ⚠️ چرا نه a.map((v, i) => [v, b[i]])؟
+// چون map خروجی‌اش را از «نوع آرایه‌ی عبارت» می‌گیرد و عبارت [v, b[i]]
+// یک (A | B)[] است نه Tuple. تایپ بازگشتی [A, B][] هم satisfied نمی‌شود
+// (TS2322). برای Tuple باید یا as const بزنی یا صریح push کنی.`,
     },
   },
 

@@ -47,7 +47,7 @@ a:hover { text-decoration: underline; }
 }
 
 /* ---------- CRITICAL: isolation of English tokens inside Persian RTL text -- */
-code, kbd, pre, samp, .ltr-token {
+code, kbd, pre, samp {
   font-family: var(--font-mono);
   direction: ltr;
   unicode-bidi: isolate;

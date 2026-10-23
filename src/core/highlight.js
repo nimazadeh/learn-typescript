@@ -1,5 +1,7 @@
 /* ==========================================================================
-   Syntax Highlighter — یک توکنایزر تک‌گذر برای تمام بلوک‌های کد استودیو (DRY)
+   Syntax Highlighter — توکنایزر تک‌گذر برای بلوک‌های کد استودیو (DRY)
+   زبان‌ها: TypeScript (پیش‌فرض)، Shell/Bash و JSON.
+   هیچ وابستگی بیرونی ندارد.
    ========================================================================== */
 
 const KEYWORDS = new Set([
@@ -57,10 +59,120 @@ export function highlight(code) {
   return out;
 }
 
+/* -------------------------------------------------------------------------- */
+/* زبان‌های دیگر — همه از یک توکنایزر مشترک استفاده می‌کنند (DRY)                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * توکنایزر عمومی: یک RegExp با گروه‌های نام‌دار + یک نگاشت «گروه → کلاس CSS».
+ * @param {string} code
+ * @param {RegExp} re
+ * @param {(groups: Record<string,string|undefined>, code: string, next: string) => string|null} classify
+ */
+function tokenize(code, re, classify) {
+  let out = '';
+  let last = 0;
+  re.lastIndex = 0;
+  for (let m; (m = re.exec(code)) !== null;) {
+    if (m[0] === '') { re.lastIndex++; continue; }
+    if (m.index > last) out += escapeHtml(code.slice(last, m.index));
+    const cls = classify(m.groups ?? {}, code, code[re.lastIndex] ?? '');
+    out += cls ? `<span class="${cls}">${escapeHtml(m[0])}</span>` : escapeHtml(m[0]);
+    last = m.index + m[0].length;
+  }
+  if (last < code.length) out += escapeHtml(code.slice(last));
+  return out;
+}
+
+const BASH_RE =
+  /(?<comment>#[^\n]*)|(?<str>"(?:\\.|[^"\\])*"|'[^'\n]*')|(?<flag>(?<=\s)--?[A-Za-z][\w-]*)|(?<num>\b\d[\w.]*\b)|(?<word>[A-Za-z_$][\w$.\/-]*)|(?<punct>[|&;<>(){}\[\]*+=!~]+)/gu;
+
+const BASH_KEYWORDS = new Set(['cd', 'mkdir', 'rm', 'cp', 'mv', 'cat', 'echo', 'export', 'ls', 'pwd', 'sudo', 'curl', 'git', 'if', 'then', 'fi', 'for', 'do', 'done', 'while']);
+
+/** highlighting برای Shell/Bash — `npm i -D typescript` باید شبیه کد TS رنگ نشود. */
+export function highlightBash(code) {
+  return tokenize(code, BASH_RE, (g, src, next) => {
+    if (g.comment) return 'tok-com';
+    if (g.str) return 'tok-str';
+    if (g.flag) return 'tok-num';
+    if (g.num) return 'tok-num';
+    if (g.word) {
+      if (BASH_KEYWORDS.has(g.word)) return 'tok-kw';
+      if (/^[A-Z_][A-Z0-9_]*$/.test(g.word)) return 'tok-type';
+      if (next.trimStart().startsWith(' ')) return 'tok-fn';
+      return null;
+    }
+    if (g.punct) return 'tok-pun';
+    return null;
+  });
+}
+
+const JSON_RE =
+  /(?<key>"(?:\\.|[^"\\])*")(?=\s*:)|(?<str>"(?:\\.|[^"\\])*")|(?<num>-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)|(?<lit>\btrue\b|\bfalse\b|\bnull\b)|(?<punct>[{}\[\],:])/gu;
+
+/** highlighting برای JSON (مثل tsconfig.json) — کلیدها رنگ تایپ می‌گیرند. */
+export function highlightJson(code) {
+  return tokenize(code, JSON_RE, (g) => {
+    if (g.key) return 'tok-type';
+    if (g.str) return 'tok-str';
+    if (g.num) return 'tok-num';
+    if (g.lit) return 'tok-kw';
+    if (g.punct) return 'tok-pun';
+    return null;
+  });
+}
+
+/** زبان‌های پشتیبانی‌شده و برچسب هرکدام. `js` همان رنگ TS را می‌گیرد. */
+export const CODE_LANGS = {
+  ts: { label: 'TypeScript', highlight },
+  js: { label: 'JavaScript', highlight },
+  bash: { label: 'Shell', highlight: highlightBash },
+  json: { label: 'JSON', highlight: highlightJson },
+};
+
+/**
+ * زبان یک بلوک کد را برمی‌گرداند: اول `lang` صریح محتوا، بعد تشخیص خودکار.
+ * این تابع هم توسط نما (برای رنگ و دکمه‌ی اجرا) و هم توسط ممیزی محتوا استفاده
+ * می‌شود تا هر دو یک قضاوت داشته باشند (DRY).
+ * @param {{ code?: string, lang?: string }} block
+ * @returns {'ts'|'bash'|'json'}
+ */
+export function detectLang({ code = '', lang } = {}) {
+  if (lang && CODE_LANGS[lang]) return lang;
+
+  // خط‌های توضیح و خالی مزاحم تشخیص نیستند: `.prettierrc` معمولاً با کامنت شروع می‌شود
+  const head = code
+    .split('\n')
+    .filter((l) => l.trim() && !l.trim().startsWith('//') && !l.trim().startsWith('#'))
+    .join('\n')
+    .replace(/^\s+/, '');
+  const firstLine = head.split('\n')[0] ?? '';
+
+  if (/^(npm|npx|pnpm|yarn|bun|deno|tsc|ts-node|tsx|node|mkdir|cd|git|rm|cp|mv|cat|echo|ls|pwd|curl|sudo)\b/.test(firstLine)) return 'bash';
+  if (firstLine.startsWith('$ ')) return 'bash';
+
+  // JSON/JSONC: با `{` یا `[` شروع شود و «کلید رشته‌ای» داشته باشد.
+  // (رشته‌ی `"strict"` داخل JSON باعث می‌شود بررسی ساده‌ی `\bconst\b` خطا بدهد،
+  //  پس نشانه‌های TS را فقط با الگوهای غیررشته‌ای بررسی می‌کنیم.)
+  if (/^[{[]/.test(firstLine)) {
+    const hasQuotedKeys = /"[\w$@.*\/-]+"\s*:/.test(head);
+    // نشانه‌های TS با دقت انتخاب شده‌اند: `"extends"` داخل tsconfig.json یک کلید است،
+    // نه کلیدواژه‌ی `type X extends Y`. به همین دلیل الگو لنگر دارد.
+    const hasTsSyntax =
+      /=>|(^|\n)\s*(export\s+)?(declare\s+)?(abstract\s+)?(async\s+)?function\b/.test(head) ||
+      /(^|\n)\s*(export\s+)?(type|interface|class|enum|const|let|var)\s/.test(head) ||
+      /\w\s*:\s*(string|number|boolean|unknown|never|any)\b/.test(head);
+    if (hasQuotedKeys && !hasTsSyntax) return 'json';
+  }
+
+  return 'ts';
+}
+
 /** Wraps highlighted code into a numbered <pre> block (used by every view). */
-export function highlightedLines(code) {
+export function highlightedLines(code, lang = 'ts') {
+  const paint = CODE_LANGS[lang]?.highlight ?? highlight;
   const lines = code.replace(/\t/g, '  ').split('\n');
   return lines
-    .map((line) => `<span class="code-line">${highlight(line) || '&nbsp;'}</span>`)
+    .map((line) => `<span class="code-line">${paint(line) || '&nbsp;'}</span>`)
     .join('\n');
 }

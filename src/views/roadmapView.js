@@ -7,7 +7,7 @@ import { el, svg, render, toFa } from '../core/dom.js';
 import { getState, statusOf, cycleNodeStatus, subscribe } from '../core/store.js';
 import { ALL_LESSONS, LESSON_BY_ID, CHAPTER_BY_ID, DAY_OF_LESSON, TOTAL_DAYS } from '../data/curriculum/index.js';
 import { ROADMAP_GRAPH_NODES, ROADMAP_EDGES, ROADMAP_SECTIONS, ROADMAP_LABELS } from '../data/roadmapGraph.js';
-import { progressBar, sectionTitle, chip } from '../components/ui.js';
+import { progressBar, sectionTitle } from '../components/ui.js';
 import { diagram } from '../components/diagrams.js';
 
 const PADDING = 90;
@@ -45,7 +45,13 @@ export function RoadmapView({ navigate }) {
   let view = { x: bounds.minX, y: bounds.minY, w: worldW, h: worldH };
 
   /* --- canvas ------------------------------------------------------------ */
-  const svgRoot = svg('svg', { class: 'roadmap-svg', xmlns: 'http://www.w3.org/2000/svg' });
+  const svgRoot = svg('svg', {
+    class: 'roadmap-svg',
+    xmlns: 'http://www.w3.org/2000/svg',
+    // گره‌ها خودشان برچسب و role دارند، پس نقشه «گروه» است نه یک تصویر تک‌تکه
+    role: 'group',
+    'aria-label': 'نقشه‌ی راه TypeScript',
+  });
   const viewport = el('div', { class: 'roadmap-viewport', tabindex: 0 }, [svgRoot]);
 
   function edgePath(source, target) {
@@ -286,7 +292,8 @@ export function RoadmapView({ navigate }) {
   /* --- header / stats ---------------------------------------------------- */
   const statsBar = el('div', { class: 'map-stats' });
   const legend = el('div', { class: 'map-legend' });
-  const toolbar = el('div', { class: 'map-toolbar' });
+  // پوسته‌ی این نوار همان .roadmap-floating-toolbar است؛ کلاس جدا و بی‌CSS اضافه نکردیم
+  const toolbar = el('div');
   const filterRow = el('div', { class: 'filter-row' });
 
   function refreshStats() {
@@ -401,7 +408,7 @@ export function RoadmapView({ navigate }) {
             oncontextmenu: (event) => { event.preventDefault(); cycleNodeStatus(lesson.id); buildMatrix(); refreshStats(); draw(activeFilter); },
           }, [
             el('span', { class: 'matrix-chip-status', text: { mastered: '✓', learning: '◐', review: '↻', none: '○' }[status] }),
-            el('span', { class: 'matrix-chip-text' }, [lesson.titleFa]),
+            el('span', {}, [lesson.titleFa]),
           ]);
         })),
       ]);
@@ -423,6 +430,12 @@ export function RoadmapView({ navigate }) {
 
   const canvas = el('div', { class: 'roadmap-canvas' }, [
     el('div', { class: 'roadmap-floating-toolbar' }, toolbar),
+    /* توصیف متنیِ نقشه برای صفحه‌خوان: گره‌های SVG به‌تنهایی «چرا کنار هم
+       هستند» را نمی‌رسانند. با کلاس sr-only دیده نمی‌شود ولی خوانده می‌شود. */
+    el('p', {
+      class: 'sr-only',
+      text: 'نقشه‌ی راه TypeScript بر اساس roadmap.sh. هر گره یک درس کامل است و با Tab بین گره‌ها جابه‌جا شوید و با Enter درس را باز کنید. رنگ هر گره وضعیت پیشرفت شما را نشان می‌دهد: سبز یعنی مسلط، کهربایی یعنی در حال یادگیری، سرخ یعنی نیاز به مرور.',
+    }),
     viewport,
   ]);
 
@@ -438,7 +451,7 @@ export function RoadmapView({ navigate }) {
       ]),
       el('aside', { class: 'roadmap-right' }, [
         el('div', { class: 'side-card' }, [
-          el('h4', { text: '🧭 راهنمای رنگ‌ها' }),
+          el('h3', { text: '🧭 راهنمای رنگ‌ها' }),
           el('ul', { class: 'guide-list' }, [
             guideRow('گره‌ی زرد', 'فصل اصلی نقشه‌ی راه (topic) — نقطه‌ی عطف مسیر'),
             guideRow('گره‌ی تیره', 'زیرموضوع قابل یادگیری (subtopic)'),
@@ -447,12 +460,12 @@ export function RoadmapView({ navigate }) {
           ]),
         ]),
         el('div', { class: 'side-card' }, [
-          el('h4', { text: '📈 تصویر کلی مسیر' }),
+          el('h3', { text: '📈 تصویر کلی مسیر' }),
           diagram('type-lattice'),
           el('p', { class: 'side-note', text: 'هر تایپ یک «مجموعه از مقادیر» است. کل سیستم تایپ TypeScript از همین یک تصویر ذهنی مشتق می‌شود.' }),
         ]),
         el('div', { class: 'side-card' }, [
-          el('h4', { text: '⚡ شروع سریع' }),
+          el('h3', { text: '⚡ شروع سریع' }),
           el('div', { class: 'quick-actions' }, [
             el('button', { class: 'btn primary block', text: '▶ ادامه از درس بعدی', onclick: () => navigate('academy', { nodeId: nextLessonId() }) }),
             el('button', { class: 'btn block', text: '🧪 آزمایشگاه آزاد TypeScript', onclick: () => navigate('playground') }),

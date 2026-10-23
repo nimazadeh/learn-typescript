@@ -7,12 +7,15 @@ import {
   getState, setState, subscribe, statusOf, streakDays, todayEntry, logStudyMinutes,
   markBlockDone, cardProgress, reviewCard, dueCards,
 } from '../core/store.js';
-import { sectionTitle, chip, progressBar } from '../components/ui.js';
-import { FLASHCARDS, WEEKLY_KPIS, STUDY_METHODS } from '../data/playbook.js';
-import {
-  ALL_LESSONS, DAY_OF_LESSON, TOTAL_DAYS, CHAPTER_BY_ID, DAILY_MINUTES,
-} from '../data/curriculum/index.js';
+import { sectionTitle, chip, progressBar, showToast } from '../components/ui.js';
+import { FLASHCARDS, WEEKLY_KPIS, STUDY_METHODS, kpiActual } from '../data/playbook.js';
+import { ALL_LESSONS, DAY_OF_LESSON, TOTAL_DAYS, CHAPTER_BY_ID } from '../data/curriculum/index.js';
 import { diagram } from '../components/diagrams.js';
+import {
+  onTimerChange, onTimerFinish, startTimer, pauseTimer, resumeTimer, stopTimer,
+  remainingOf, progressOf,
+} from '../services/timer.js';
+import { softChime } from '../services/audio.js';
 
 /* ------------------------------------------------------------------ */
 /* Study Blocks — معماری روز ۵ ساعته                                   */
@@ -79,9 +82,12 @@ export const blockWorkMinutes = (block) => block?.workMinutes ?? 50;
 /** دقیقه‌های استراحت بدون صفحه‌نمایش پس از هر بلوک. */
 export const blockBreakMinutes = (block) => block?.breakMinutes ?? 10;
 
-const WORK_TOTAL = STUDY_BLOCKS.reduce((sum, b) => sum + b.workMinutes, 0);      // ۲۵۰
-const BREAK_TOTAL = STUDY_BLOCKS.reduce((sum, b) => sum + b.breakMinutes, 0);   // ۵۰
-const BLOCK_TOTAL = WORK_TOTAL + BREAK_TOTAL;                                    // ۳۰۰ = ۵ ساعت
+/** مجموع دقیقه‌های «کار عمیق» همه‌ی بلوک‌ها (۲۵۰). تنها منبع حقیقت. */
+export const WORK_TOTAL = STUDY_BLOCKS.reduce((sum, b) => sum + b.workMinutes, 0);
+/** مجموع دقیقه‌های «استراحت» همه‌ی بلوک‌ها (۵۰). */
+export const BREAK_TOTAL = STUDY_BLOCKS.reduce((sum, b) => sum + b.breakMinutes, 0);
+/** جمع کار + استراحت؛ باید دقیقاً برابر بودجه‌ی روزانه (۳۰۰ = ۵ ساعت) باشد. */
+export const BLOCK_TOTAL = WORK_TOTAL + BREAK_TOTAL;
 
 /** ثانیه‌های بلوک با اندیس دلخواه (با محدودسازی امن). */
 function blockSeconds(index) {
@@ -89,32 +95,53 @@ function blockSeconds(index) {
   return blockWorkMinutes(STUDY_BLOCKS[safe]) * 60;
 }
 
-let tickTimer = null;
-
 export function CoachView({ navigate }) {
   const root = el('div', { class: 'view coach-view' });
   const state = getState();
 
-  /* ---------------- timer engine ---------------- */
-  const timerState = state.timer ?? { blockIndex: 0, remaining: blockSeconds(0), running: false };
-  setState({ timer: timerState });
+  /* ---------------- تایمر بلوک‌ها ----------------
+     نبض و شمارش معکوس در services/timer.js است (سراسری و پایدار).
+     اینجا فقط «کدام بلوک انتخاب شده» نگه داشته می‌شود. */
+  setState({ timer: { blockIndex: 0, ...(state.timer ?? {}) } });
 
-  const clockEl = el('div', { class: 'timer-clock', dir: 'ltr', text: formatClock(timerState.remaining) });
+  function selectedBlockIndex() {
+    return getState().timer?.blockIndex ?? 0;
+  }
+
+  function selectedBlock() {
+    return STUDY_BLOCKS[selectedBlockIndex()] ?? STUDY_BLOCKS[0];
+  }
+
+  /** آیا تایمر سراسری در حال شمارشِ یک «بلوک مربی» است؟ */
+  function isCoachRunning(pomodoro = getState().pomodoro ?? {}) {
+    return Boolean(pomodoro.running && pomodoro.kind === 'block');
+  }
+
+  /** ثانیه‌های باقی‌مانده‌ی بلوک جاری (از تایمر سراسری مشتق می‌شود). */
+  function coachSeconds() {
+    const pomodoro = getState().pomodoro ?? {};
+    if (pomodoro.kind === 'block' && (pomodoro.running || pomodoro.remainingMs > 0)) {
+      return Math.ceil(remainingOf(pomodoro) / 1000);
+    }
+    return blockSeconds(selectedBlockIndex());
+  }
+
+  const clockEl = el('div', { class: 'timer-clock', dir: 'ltr', text: formatClock(coachSeconds()) });
   const ringEl = el('div', { class: 'timer-ring' });
   const blockLabel = el('div', { class: 'timer-block-label' });
-  const startBtn = el('button', { class: 'btn primary lg', text: timerState.running ? '⏸ توقف' : '▶ شروع بلوک' });
+  const startBtn = el('button', { class: 'btn primary lg', text: '▶ شروع بلوک' });
   const resetBtn = el('button', { class: 'btn ghost', text: '↺ بازنشانی بلوک' });
   const skipBtn = el('button', { class: 'btn ghost', text: '⏭ بلوک بعدی' });
 
-  function currentBlock() {
-    return STUDY_BLOCKS[getState().timer.blockIndex] ?? STUDY_BLOCKS[0];
-  }
-
   function paintTimer() {
-    const { remaining, running, blockIndex } = getState().timer;
-    const block = STUDY_BLOCKS[blockIndex] ?? STUDY_BLOCKS[0];
+    const pomodoro = getState().pomodoro ?? {};
+    const running = isCoachRunning(pomodoro);
+    const block = selectedBlock();
+    const remaining = coachSeconds();
     const total = blockWorkMinutes(block) * 60;
-    const pct = Math.max(0, Math.min(1, 1 - remaining / total));
+    const pct = pomodoro.kind === 'block' && pomodoro.totalMs
+      ? progressOf(pomodoro)
+      : Math.max(0, Math.min(1, 1 - remaining / total));
 
     clockEl.textContent = formatClock(remaining);
     clockEl.classList.toggle('is-low', remaining <= 60 && remaining > 0);
@@ -135,82 +162,47 @@ export function CoachView({ navigate }) {
     );
 
     blockCards.querySelectorAll('.block-card').forEach((card, index) => {
-      card.classList.toggle('is-active', index === blockIndex);
+      card.classList.toggle('is-active', index === selectedBlockIndex());
       card.classList.toggle('is-done', getState().studyLog[todayKey()]?.blocks?.includes(index) ?? false);
     });
   }
 
-  function tick() {
-    const timer = getState().timer;
-    if (!timer.running) return;
-    if (timer.remaining <= 1) {
-      finishBlock();
-      return;
-    }
-    setState({ timer: { ...timer, remaining: timer.remaining - 1 } });
-    paintTimer();
-  }
-
   function finishBlock() {
-    const timer = getState().timer;
-    const block = STUDY_BLOCKS[timer.blockIndex];
-    const nextIndex = Math.min(STUDY_BLOCKS.length - 1, timer.blockIndex + 1);
-    markBlockDone(timer.blockIndex);
+    const blockIndex = selectedBlockIndex();
+    const block = STUDY_BLOCKS[blockIndex];
+    const nextIndex = Math.min(STUDY_BLOCKS.length - 1, blockIndex + 1);
+    markBlockDone(blockIndex);
     // دقیقه‌های همان بلوک یک‌بار و در پایان ثبت می‌شود (بدون شمارش دوباره در هر tick)
     logStudyMinutes(blockWorkMinutes(block));
-    setState({ timer: { blockIndex: nextIndex, remaining: blockSeconds(nextIndex), running: false } });
-    chime();
+    setState({ timer: { ...getState().timer, blockIndex: nextIndex } });
+    if (getState().prefs?.sound !== false) softChime();
     paintTimer();
     renderDayStats();
-    notify(`بلوک «${block.title}» تمام شد ✅ — ${toFa(blockBreakMinutes(block))} دقیقه بدون صفحه‌نمایش استراحت کن.`);
-  }
-
-  function chime() {
-    if (!getState().prefs.sound) return;
-    try {
-      const Ctx = window.AudioContext ?? window.webkitAudioContext;
-      if (!Ctx) return;
-      const ctx = new Ctx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.frequency.value = 660;
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.7);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.72);
-    } catch { /* audio is optional */ }
-  }
-
-  function notify(text) {
-    const toast = el('div', { class: 'toast', text });
-    document.body.appendChild(toast);
-    setTimeout(() => toast.classList.add('is-out'), 4200);
-    setTimeout(() => toast.remove(), 4800);
+    showToast(`بلوک «${block.title}» تمام شد ✅ — ${toFa(blockBreakMinutes(block))} دقیقه بدون صفحه‌نمایش استراحت کن.`);
   }
 
   startBtn.onclick = () => {
-    const timer = getState().timer;
-    if (!timer.running && tickTimer === null) tickTimer = setInterval(tick, 1000);
-    if (timer.running && tickTimer !== null) {
-      clearInterval(tickTimer);
-      tickTimer = null;
+    const pomodoro = getState().pomodoro ?? {};
+    if (isCoachRunning(pomodoro)) {
+      pauseTimer();
+    } else if (pomodoro.kind === 'block' && pomodoro.remainingMs > 0) {
+      resumeTimer();
+    } else {
+      const block = selectedBlock();
+      startTimer(blockWorkMinutes(block), { label: block.title.replace(/^بلوک \d+ — /, ''), kind: 'block', silent: true });
     }
-    setState({ timer: { ...timer, running: !timer.running } });
     paintTimer();
   };
 
   resetBtn.onclick = () => {
-    const timer = getState().timer;
-    setState({ timer: { ...timer, remaining: blockSeconds(timer.blockIndex) } });
+    stopTimer();
     paintTimer();
   };
 
   skipBtn.onclick = () => {
-    const timer = getState().timer;
-    const next = Math.min(STUDY_BLOCKS.length - 1, timer.blockIndex + 1);
-    setState({ timer: { blockIndex: next, remaining: blockSeconds(next), running: timer.running } });
+    stopTimer();
+    const next = Math.min(STUDY_BLOCKS.length - 1, selectedBlockIndex() + 1);
+    setState({ timer: { ...getState().timer, blockIndex: next } });
     paintTimer();
   };
 
@@ -219,7 +211,8 @@ export function CoachView({ navigate }) {
     el('button', {
       class: 'block-card',
       onclick: () => {
-        setState({ timer: { blockIndex: block.index, remaining: blockSeconds(block.index), running: false } });
+        stopTimer();
+        setState({ timer: { ...getState().timer, blockIndex: block.index } });
         paintTimer();
       },
     }, [
@@ -385,15 +378,7 @@ export function CoachView({ navigate }) {
   /* ---------------- KPIs ---------------- */
   const kpiWrap = el('div', { class: 'kpi-grid' });
   function renderKpis() {
-    const s = getState();
-    const actual = {
-      lessons: s.completedNodes.filter((id) => ALL_LESSONS.some((l) => l.id === id)).length,
-      minutes: Object.values(s.studyLog).reduce((sum, d) => sum + (d.minutes ?? 0), 0),
-      quizAccuracy: accuracy(),
-      labRuns: s.labRuns ?? 0,
-      flashcards: Object.keys(s.flashcardProgress).length,
-      errors: s.notes ? Object.keys(s.notes).length : 0,
-    };
+    const actual = kpiActual(getState(), (id) => ALL_LESSONS.some((l) => l.id === id));
     render(
       kpiWrap,
       ...WEEKLY_KPIS.map((kpi) => el('div', { class: 'kpi-card' }, [
@@ -411,7 +396,7 @@ export function CoachView({ navigate }) {
   const methodsGrid = el('div', { class: 'methods-grid' }, STUDY_METHODS.map((m) =>
     el('article', { class: 'method-card' }, [
       el('span', { class: 'method-icon', text: m.icon }),
-      el('h4', { text: m.title }),
+      el('h3', { text: m.title }),
       el('p', { text: m.body }),
     ])));
 
@@ -488,13 +473,15 @@ export function CoachView({ navigate }) {
     renderPlan();
     renderKpis();
   });
+  const unsubscribeTimer = onTimerChange(paintTimer);
+  const unsubscribeFinish = onTimerFinish((finished) => {
+    if (finished?.kind === 'block') finishBlock();
+  });
 
   root.addEventListener('view:destroy', () => {
     unsubscribe();
-    if (tickTimer !== null) {
-      clearInterval(tickTimer);
-      tickTimer = null;
-    }
+    unsubscribeTimer();
+    unsubscribeFinish();
   });
 
   return root;

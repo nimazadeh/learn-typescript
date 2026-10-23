@@ -9,7 +9,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-md);
 }
-.snippet-panel h4 { font-size: var(--fs-sm); font-weight: 800; margin-bottom: var(--sp-3); }
+.snippet-panel h3 { font-size: var(--fs-sm); font-weight: 800; margin-bottom: var(--sp-3); }
 .snippet-row { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 .snippet-btn {
   padding: 0.36rem 0.8rem;
@@ -72,7 +72,7 @@
 .project-card.level-intermediate { border-block-start: 3px solid var(--warning); }
 .project-card.level-advanced { border-block-start: 3px solid var(--danger); }
 .project-card header { display: flex; flex-direction: column; gap: var(--sp-2); }
-.project-card h4 { font-size: var(--fs-base); font-weight: 800; }
+.project-card h3 { font-size: var(--fs-base); font-weight: 800; }
 .project-spec { font-size: var(--fs-sm); color: var(--ink-2); flex: 1; }
 .project-skills { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
 .acceptance-list { font-size: var(--fs-xs); color: var(--ink-2); margin-top: var(--sp-2); }
@@ -247,6 +247,7 @@
   box-shadow: var(--shadow-md);
   animation: viewIn 260ms var(--ease);
 }
+.flashcard.is-front { border-inline-start: 3px solid var(--violet); }
 .flashcard.is-back { border-color: var(--accent-border); }
 .flashcard-topics { display: flex; gap: var(--sp-2); }
 .flashcard-front { font-size: var(--fs-md); font-weight: 700; line-height: 1.8; min-height: 62px; }
@@ -292,7 +293,7 @@
 }
 .method-card:hover { border-color: var(--cyan); transform: translateY(-2px); }
 .method-icon { font-size: 1.5rem; }
-.method-card h4 { font-size: var(--fs-sm); font-weight: 800; }
+.method-card h3 { font-size: var(--fs-sm); font-weight: 800; }
 .method-card p { font-size: var(--fs-xs); color: var(--ink-2); line-height: 1.9; }
 
 /* ---------------- Playbook ---------------- */
@@ -371,7 +372,7 @@
 }
 .method-row:hover { border-inline-start: 3px solid var(--cyan); background: var(--bg-surface-2); }
 .method-row-icon { font-size: 1.6rem; flex-shrink: 0; }
-.method-row h4 { font-size: var(--fs-sm); font-weight: 800; margin-bottom: var(--sp-1); }
+.method-row h3 { font-size: var(--fs-sm); font-weight: 800; margin-bottom: var(--sp-1); }
 .method-row p { font-size: var(--fs-xs); color: var(--ink-2); line-height: 1.9; }
 
 .cheat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--sp-4); margin-bottom: var(--sp-8); }
@@ -382,7 +383,7 @@
   border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-sm);
 }
-.cheat-card h4 { font-size: var(--fs-sm); font-weight: 800; margin-bottom: var(--sp-3); color: var(--accent); }
+.cheat-card h3 { font-size: var(--fs-sm); font-weight: 800; margin-bottom: var(--sp-3); color: var(--accent); }
 .cheat-list { margin: 0; }
 .cheat-list dt {
   font-family: var(--font-mono);
@@ -454,7 +455,7 @@
   background: var(--bg-surface-1);
   border: 1px solid var(--border-subtle);
 }
-.resource-group h4 {
+.resource-group h3 {
   font-size: var(--fs-sm);
   font-weight: 800;
   margin-bottom: var(--sp-3);
